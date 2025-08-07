@@ -1,0 +1,9 @@
+build/
+.dart_tool/
+.packages
+.pub-cache/
+.idea/
+.vscode/
+*.iml
+flutter_*.png
+pubspec.lock
