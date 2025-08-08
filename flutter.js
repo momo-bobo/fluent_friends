@@ -1,0 +1,1 @@
+// Flutter JS bridge placeholder
