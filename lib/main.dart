@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'screens/welcome_screen.dart';
 
 void main() {
-  runApp(FluentFriendsApp());
+  runApp(const FluentFriendsApp());
 }
 
 class FluentFriendsApp extends StatelessWidget {
+  const FluentFriendsApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -13,9 +15,8 @@ class FluentFriendsApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         scaffoldBackgroundColor: Colors.white,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: WelcomeScreen(),
+      home: const WelcomeScreen(),
     );
   }
 }
