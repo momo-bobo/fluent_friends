@@ -10,9 +10,7 @@ class SpeechService {
   }
 
   void start() async {
-    await _speech.listen(onResult: (result) {
-      _onResult(result.recognizedWords);
-    });
+    await _speech.listen(onResult: (r) => _onResult(r.recognizedWords));
   }
 
   void stop() {
