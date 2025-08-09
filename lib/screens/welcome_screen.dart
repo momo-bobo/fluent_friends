@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'speech_input_screen.dart';
+import 'practice_flow_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -44,7 +44,7 @@ class WelcomeScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const SpeechInputScreen()),
+                  MaterialPageRoute(builder: (_) => const PracticeFlowScreen()),
                 );
               },
             ),
