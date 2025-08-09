@@ -74,9 +74,14 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   // session scoring (aggregate shown on final page)
   final List<int> sessionScores = [];
 
-  // We’ll do 2 pairs: [intro] → [word, short sentence] x2 → then user can tap Done
-  int cyclesCompleted = 0; // counts completed pairs (word+short sentence)
+  // 2 pairs by default: [intro] → [word + short sentence] x2 → user taps Done
+  int cyclesCompleted = 0;
   final int maxCycles = 2;
+
+  // ✅ Layout constants so nothing jumps
+  static const double _donutSize = 150; // 50% smaller
+  static const double _donutHeight = _donutSize / 2; // gauge is a half circle
+  static const double _transcriptHeight = 56; // fixed height placeholder
 
   @override
   void initState() {
@@ -121,7 +126,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       kind == PromptKind.shortSentence && lastAssessment != null;
 
   bool get _hasNextStep {
-    // there is a "next" unless we have completed maxCycles AND we're at the end of a pair
+    // There is a "next" unless we have completed maxCycles AND we're at the end of a pair
     if (_justFinishedPair && cyclesCompleted >= maxCycles) return false;
     return true;
   }
@@ -153,11 +158,8 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         cyclesCompleted += 1;
 
         if (cyclesCompleted >= maxCycles) {
-          // We’re at the end of the planned session.
-          // Do NOT auto-navigate. The "Done" button will take them to the final page.
-          setState(() {
-            // Keep the current prompt/results visible; buttons will show "Done".
-          });
+          // End of planned session. Do NOT auto-navigate. "Done" (X) will end session.
+          setState(() {});
           return;
         }
 
@@ -203,7 +205,17 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: HomeAppBar(title: _title()),
+      // ✅ Top-left Home, top-right Done(X). Next stays in bottom row.
+      appBar: HomeAppBar(
+        title: _title(),
+        actions: [
+          IconButton(
+            tooltip: 'Done',
+            onPressed: _goDone,
+            icon: const Icon(Icons.close_outlined, color: Colors.black),
+          ),
+        ],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
@@ -212,6 +224,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Prompt
                 const SizedBox(height: 8),
                 Text(
                   '"$prompt"',
@@ -222,29 +235,39 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                 IconButton(
                   tooltip: 'Hear it',
                   onPressed: _speakPrompt,
-                  icon: const Icon(Icons.volume_up),
+                  icon: const Icon(Icons.volume_up_outlined),
                 ),
 
-                const SizedBox(height: 12),
-
-                // Transcript
-                const Text('You said:', style: TextStyle(fontSize: 18)),
-                const SizedBox(height: 6),
-                Text(
-                  heard.isEmpty ? '—' : heard,
-                  style: const TextStyle(fontSize: 20, color: Colors.blueAccent),
-                  textAlign: TextAlign.center,
-                ),
-
-                // Accuracy as half-donut (no encouragement here)
-                if (lastAssessment != null) ...[
-                  const SizedBox(height: 18),
-                  HalfDonutGauge(
-                    percent: lastAssessment!.accuracyPercent,
-                    size: 150, // was 300
-                    thickness: 40,
+                // Transcript placeholder (no label, fixed height)
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: _transcriptHeight,
+                  child: Center(
+                    child: heard.isEmpty
+                        ? const SizedBox.shrink()
+                        : Text(
+                            heard,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              color: Colors.blueAccent,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                   ),
-                ],
+                ),
+
+                // Half-donut placeholder (fixed height so layout doesn't jump)
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: _donutHeight,
+                  child: lastAssessment == null
+                      ? const SizedBox.shrink()
+                      : HalfDonutGauge(
+                          percent: lastAssessment!.accuracyPercent,
+                          size: _donutSize,
+                          thickness: 40,
+                        ),
+                ),
 
                 // Encouragement ONLY after each pair
                 if (_justFinishedPair && lastAssessment != null) ...[
@@ -262,28 +285,31 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
                 const SizedBox(height: 28),
 
-                // Bottom buttons: Repeat + Next/Done
+                // Bottom buttons: Practice + Next
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Repeat (or Stop while recording)
                     // Practice (or Stop while recording)
                     ElevatedButton.icon(
                       onPressed: _toggleRecord,
-                      icon: Icon(isListening ? Icons.stop : Icons.play_arrow, color: Colors.black),
+                      icon: Icon(
+                        isListening ? Icons.stop_outlined : Icons.play_arrow_outlined,
+                        color: Colors.black,
+                      ),
                       label: Text(
                         isListening ? 'Stop' : 'Practice',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.black,
-                          fontSize: 20, // bigger text
+                          fontSize: 20,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20), // chunkier
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                        minimumSize: const Size(160, 56),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                           side: const BorderSide(color: Colors.black, width: 2),
@@ -291,29 +317,28 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    
-                    // Next (or Done if session complete)
+
+                    // Next (always present here; disabled until we have a result)
                     ElevatedButton.icon(
-                      onPressed: lastAssessment == null
-                          ? null
-                          : (_hasNextStep ? _goNext : _goDone),
+                      onPressed: lastAssessment == null ? null : _goNext,
                       icon: Icon(
-                        _hasNextStep ? Icons.arrow_forward : Icons.check,
+                        Icons.arrow_forward_outlined,
                         color: lastAssessment == null ? Colors.black45 : Colors.black,
                       ),
                       label: Text(
-                        _hasNextStep ? 'Next' : 'Done',
+                        'Next',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: lastAssessment == null ? Colors.black45 : Colors.black,
-                          fontSize: 20, // bigger text
+                          fontSize: 20,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20), // chunkier
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                        minimumSize: const Size(160, 56),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                           side: const BorderSide(color: Colors.black, width: 2),
