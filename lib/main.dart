@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'theme.dart';
 import 'screens/welcome_screen.dart';
 
 void main() {
@@ -12,10 +13,7 @@ class FluentFriendsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Fluent Friends',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.white,
-      ),
+      theme: AppTheme.light,
       home: const WelcomeScreen(),
     );
   }
