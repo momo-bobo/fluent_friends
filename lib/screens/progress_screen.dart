@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/half_donut_gauge.dart';
 import 'welcome_screen.dart';
+import '../widgets/home_app_bar.dart';
 
 class ProgressScreen extends StatelessWidget {
   final List<int> scores; // 3 attempts
@@ -18,7 +19,7 @@ class ProgressScreen extends StatelessWidget {
     // keep it simple with a few tasteful phrases
     if (avg < 25) return "Good start!";
     if (avg < 50) return "Keep going!";
-    if (avg < 75) return "Nice progress!";
+    if (avg < 75) return "Nice!";
     if (avg < 90) return "Great job!";
     return "Fantastic!";
   }
@@ -29,12 +30,7 @@ class ProgressScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white, // clean white
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Your Progress', style: TextStyle(color: Colors.black)),
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
+      appBar: const HomeAppBar(title: 'Your Progress'),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
