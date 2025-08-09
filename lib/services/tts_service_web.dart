@@ -1,10 +1,8 @@
-import 'dart:js' as js;
+import 'dart:js_util' as js_util;
 import '../web_tts_bridge.dart';
 
 class TtsService {
-  Future<void> init() async {
-    // no-op
-  }
+  Future<void> init() async {}
 
   Future<void> speak(String text) async {
     speakText(text);
@@ -12,6 +10,11 @@ class TtsService {
 
   Future<void> stop() async {
     stopSpeaking();
+  }
+
+  Future<void> speakAndWait(String text) async {
+    final promise = speakTextAndWait(text);
+    await js_util.promiseToFuture(promise);
   }
 
   Future<List<String>> listVoices() async {
