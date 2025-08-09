@@ -103,7 +103,7 @@ AssessmentResult assessRecording({
 
   // Blend word accuracy with sound ratio -> overall accuracy
   // Heavier weight on word correctness for friendliness
-  final soundAcc = ratios[target];
+  final soundAcc = ratios[target] ?? 0.0;
   final overall = (0.7 * wordAcc + 0.3 * soundAcc).clamp(0.0, 1.0) * 100.0;
 
   return AssessmentResult(
