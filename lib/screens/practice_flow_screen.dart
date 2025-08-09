@@ -8,6 +8,7 @@ import '../services/speech_service.dart';
 import '../services/tts_service.dart';
 import '../services/tones_service.dart';
 import 'session_complete_screen.dart';
+import '../content/content_repository.dart';
 
 enum PromptKind { introSentence, word, shortSentence }
 
@@ -23,49 +24,8 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   final TtsService _tts = TtsService();
   final TonesService _tones = TonesService();
 
-  // Content banks (will move to JSON later)
-  final Map<String, List<String>> introSentences = {
-    'R': [
-      'The red rabbit ran rapidly.',
-      'Rachel rode the roller coaster.',
-      'Rain rushed down the river.',
-    ],
-    'S': [
-      'Sally sells seashells by the seashore.',
-      'Seven snakes slither silently.',
-      'Sam saw seven seagulls.',
-    ],
-    'Sh': [
-      'The ship sails in the shining sun.',
-      'She shouted to her friends.',
-      'Shiny shoes should stay clean.',
-    ],
-  };
-
-  final Map<String, List<String>> wordsBySound = {
-    'R': ['rabbit', 'river', 'rocket', 'ring', 'red'],
-    'S': ['sun', 'sand', 'sock', 'soup', 'seal'],
-    'Sh': ['ship', 'shoe', 'shell', 'shark', 'shadow'],
-  };
-
-  // Short sentence templates include \$WORD
-  final Map<String, List<String>> shortSentenceTpl = {
-    'R': [
-      'The \$WORD is ready.',
-      'We found the \$WORD.',
-      'See the \$WORD today.',
-    ],
-    'S': [
-      'The \$WORD is shiny.',
-      'I see the \$WORD.',
-      'Small \$WORD here.',
-    ],
-    'Sh': [
-      'The \$WORD is shiny.',
-      'She has a \$WORD.',
-      'Show the \$WORD.',
-    ],
-  };
+  late ContentRepository _content;
+  bool _loading = true;
 
   PromptKind kind = PromptKind.introSentence;
   String targetSound = 'R';
@@ -75,50 +35,51 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   String heard = '';
   AssessmentResult? lastAssessment;
 
-  // Session scoring (aggregate shown on final page)
   final List<int> sessionScores = [];
-
-  // 2 pairs by default: [intro] → [word + short sentence] x2 → user taps Done
   int cyclesCompleted = 0;
   final int maxCycles = 2;
 
-  // Layout constants so nothing jumps
-  static const double _donutSize = 150; // smaller
-  static const double _donutHeight = _donutSize / 2; // half circle
-  static const double _transcriptHeight = 56; // fixed-height placeholder
+  static const double _donutSize = 150;
+  static const double _donutHeight = _donutSize / 2;
+  static const double _transcriptHeight = 56;
 
-  // 🔊 Autoplay TTS (sticky)
   bool _autoplayTts = true;
+  bool _didKickoff = false;
 
-  bool _didKickoff = false; // ensure first auto-kickoff happens once
-
-  // Live mic level for wave (0..1)
   double _micLevel = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _tts.init();
-    _tones.init();
+    _initAll();
+  }
+
+  Future<void> _initAll() async {
+    await _tts.init();
+    await _tones.init();
     _speech.init(onResult: _onHeard);
 
-    // Pick a random intro sentence across sounds
-    final sounds = introSentences.keys.toList()..shuffle();
-    targetSound = sounds.first;
-    final list = List<String>.from(introSentences[targetSound]!)..shuffle();
-    prompt = list.first;
+    // Load content JSON
+    _content = await ContentRepository.loadFromAssets();
+
+    // Choose starting sound/prompt from content
+    targetSound = _content.randomSoundKey();
+    prompt = _content.randomIntroSentence(targetSound);
+
+    setState(() {
+      _loading = false;
+    });
 
     // Auto-play prompt then auto-start practice on first load
     WidgetsBinding.instance.addPostFrameCallback((_) => _kickoffIfNeeded());
   }
 
   Future<void> _kickoffIfNeeded() async {
-    if (_didKickoff) return;
+    if (_didKickoff || _loading) return;
     _didKickoff = true;
 
     if (_autoplayTts) {
       await _tts.stop();
-      // wait for TTS to finish before recording
       await _tts.speakAndWait(prompt);
     }
     await _startListening();
@@ -132,7 +93,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     });
     _tones.playStartDing();
     if (kIsWeb) {
-      // start web mic level meter (no-op on mobile)
       await TonesService.startMicLevelStream(
         onLevel: (lvl) {
           if (!mounted) return;
@@ -162,7 +122,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       lastAssessment = result;
       sessionScores.add(result.accuracyPercent.round());
     });
-    // recording already stopped by recognizer; ensure our UI/sounds follow
     _stopListening();
   }
 
@@ -185,47 +144,41 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   }
 
   Future<void> _goNext() async {
-    // Decide next prompt based on last assessment (weakest sound)
     if (lastAssessment != null) {
       targetSound = lastAssessment!.targetSound;
+      // if target sound not in content (edge), keep current
+      if (!_content.hasSound(targetSound)) {
+        targetSound = _content.randomSoundKey();
+      }
     }
 
     switch (kind) {
       case PromptKind.introSentence:
         kind = PromptKind.word;
-        lastWord = _pickRandom(wordsBySound[targetSound] ?? ['practice']);
+        lastWord = _content.randomWord(targetSound);
         prompt = lastWord;
         break;
-
       case PromptKind.word:
         kind = PromptKind.shortSentence;
-        final tplList = shortSentenceTpl[targetSound] ?? ['Say \$WORD clearly.'];
-        final tpl = _pickRandom(tplList);
-        prompt = tpl.replaceAll('\$WORD', lastWord);
+        prompt = _content.shortSentenceWithWord(targetSound, lastWord);
         break;
-
       case PromptKind.shortSentence:
         cyclesCompleted += 1;
-
         if (cyclesCompleted >= maxCycles) {
-          setState(() {}); // end of session planned; show Done (X) only
+          setState(() {}); // end of planned session; Done (X) only
           return;
         }
-
-        // Next cycle
         kind = PromptKind.word;
-        lastWord = _pickRandom(wordsBySound[targetSound] ?? ['practice']);
+        lastWord = _content.randomWord(targetSound);
         prompt = lastWord;
         break;
     }
 
-    // Reset UI for next prompt
     setState(() {
       heard = '';
       lastAssessment = null;
     });
 
-    // 🔊 Auto-play then auto-start recording (Practice)
     if (_autoplayTts) {
       await _tts.stop();
       await _tts.speakAndWait(prompt);
@@ -249,13 +202,8 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       case PromptKind.word:
         return 'Say This Word';
       case PromptKind.shortSentence:
-        return null; // ✅ remove "Say This Short Sentence"
+        return null; // no title for short sentence
     }
-  }
-
-  String _pickRandom(List<String> list) {
-    final copy = List<String>.from(list)..shuffle();
-    return copy.first;
   }
 
   // 🔊 Voice chooser (AppBar "Voice…")
@@ -293,10 +241,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         ],
       ),
     );
@@ -309,7 +254,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     }
   }
 
-  // Speaker On/Off icons (selected has black border; unselected has none)
   Widget _speakerToggleIcons() {
     Widget _iconSel({
       required bool selected,
@@ -326,14 +270,11 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: selected ? Colors.black : Colors.transparent, // only selected outlined
+              color: selected ? Colors.black : Colors.transparent,
               width: 3,
             ),
           ),
-          child: Icon(
-            icon,
-            color: selected ? Colors.black : Colors.black45,
-          ),
+          child: Icon(icon, color: selected ? Colors.black : Colors.black45),
         ),
       );
     }
@@ -358,9 +299,29 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: HomeAppBar(
+          title: 'Loading…',
+          actions: [
+            TextButton(
+              onPressed: () {},
+              child: const Text('Voice…', style: TextStyle(color: Colors.black)),
+            ),
+            IconButton(
+              tooltip: 'Done',
+              onPressed: () {},
+              icon: const Icon(Icons.close_outlined, color: Colors.black),
+            ),
+          ],
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
-      // Top-left Home, top-right Voice… then Done (X)
       appBar: HomeAppBar(
         title: _title(),
         actions: [
@@ -383,7 +344,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Prompt
                 const SizedBox(height: 8),
                 Text(
                   '"$prompt"',
@@ -392,10 +352,8 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // Speaker On/Off (icons only)
                 _speakerToggleIcons(),
 
-                // Transcript placeholder (fixed height)
                 const SizedBox(height: 16),
                 SizedBox(
                   height: _transcriptHeight,
@@ -404,21 +362,17 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                         ? const SizedBox.shrink()
                         : Text(
                             heard,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              color: Colors.blueAccent,
-                            ),
+                            style: const TextStyle(fontSize: 20, color: Colors.blueAccent),
                             textAlign: TextAlign.center,
                           ),
                   ),
                 ),
 
-                // Visual area: wave during recording, donut after
                 const SizedBox(height: 8),
                 SizedBox(
                   height: _donutHeight,
                   child: isListening
-                      ? const VoiceWave() // animated wave (web reacts to mic)
+                      ? const VoiceWave()
                       : (lastAssessment == null
                           ? const SizedBox.shrink()
                           : HalfDonutGauge(
@@ -428,7 +382,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                             )),
                 ),
 
-                // Encouragement ONLY after each pair
                 if (_justFinishedPair && lastAssessment != null) ...[
                   const SizedBox(height: 10),
                   Text(
@@ -443,12 +396,9 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                 ],
 
                 const SizedBox(height: 28),
-
-                // Bottom buttons: Practice + Next
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Practice (or Stop while recording)
                     ElevatedButton.icon(
                       onPressed: _toggleRecord,
                       icon: Icon(
@@ -457,11 +407,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                       ),
                       label: const Text(
                         'Practice',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                          fontSize: 20,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 20),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
@@ -476,8 +422,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                       ),
                     ),
                     const SizedBox(width: 16),
-
-                    // Next (disabled until we have a result)
                     ElevatedButton.icon(
                       onPressed: lastAssessment == null ? null : _goNext,
                       icon: Icon(
