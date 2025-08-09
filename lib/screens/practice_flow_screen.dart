@@ -400,4 +400,92 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                   const SizedBox(height: 10),
                   Text(
                     _encouragement(lastAssessment!.accuracyPercent),
-                   
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontStyle: FontStyle.italic,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 28),
+
+                // Bottom buttons: Practice + Next
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Practice (or Stop while recording)
+                    ElevatedButton.icon(
+                      onPressed: _toggleRecord,
+                      icon: Icon(
+                        isListening ? Icons.stop_outlined : Icons.play_arrow_outlined,
+                        color: Colors.black,
+                      ),
+                      label: const Text(
+                        'Practice',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          fontSize: 20,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                        minimumSize: const Size(160, 56),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: const BorderSide(color: Colors.black, width: 2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Next (disabled until we have a result)
+                    ElevatedButton.icon(
+                      onPressed: lastAssessment == null ? null : _goNext,
+                      icon: Icon(
+                        Icons.arrow_forward_outlined,
+                        color: lastAssessment == null ? Colors.black45 : Colors.black,
+                      ),
+                      label: Text(
+                        'Next',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: lastAssessment == null ? Colors.black45 : Colors.black,
+                          fontSize: 20,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                        minimumSize: const Size(160, 56),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: const BorderSide(color: Colors.black, width: 2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _encouragement(double avg) {
+    if (avg < 25) return "Good start!";
+    if (avg < 50) return "Keep going!";
+    if (avg < 75) return "Nice progress!";
+    if (avg < 90) return "Great job!";
+    return "Fantastic!";
+  }
+}
