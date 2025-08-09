@@ -6,13 +6,9 @@ const VOICE_PREF_KEY = 'ttsPreferredVoiceName';
 // Heuristic: try to detect female voices on the web (no official gender field)
 function isLikelyFemale(voice) {
   const name = (voice.name || '').toLowerCase();
-  // common female voice name cues across vendors
   const femaleHints = [
     'female', 'woman', 'girl',
-    // Microsoft/Azure style names
-    'aria', 'jessa', 'zoe', 'zoey', 'zoey',
-    'jenny', 'emma', 'lisa', 'sara', 'sarah', 'salli', 'joanna', 'ivy',
-    // Apple/Siri often uses names; keep generic hints only
+    'aria', 'jessa', 'jenny', 'emma', 'lisa', 'sara', 'sarah', 'salli', 'joanna', 'ivy', 'zoe', 'zoey'
   ];
   return femaleHints.some(h => name.includes(h));
 }
@@ -23,7 +19,7 @@ function rankVoice(v) {
   const name = (v.name || '').toLowerCase();
   const lang = (v.lang || '').toLowerCase();
 
-  // Language match first
+  // Language match
   if (lang === 'en-us') score += 6;
   else if (lang.startsWith('en-')) score += 4;
   else if (lang.startsWith('en')) score += 3;
@@ -34,10 +30,10 @@ function rankVoice(v) {
   if (name.includes('apple') || name.includes('siri')) score += 3;
   if (name.includes('neural') || name.includes('wavenet') || name.includes('natural')) score += 3;
 
-  // Prefer local service (lower latency)
+  // Prefer local service
   if (v.localService) score += 1;
 
-  // Prefer likely female (since requested)
+  // Prefer likely female (requested)
   if (isLikelyFemale(v)) score += 3;
 
   // Penalize weak/default voices
@@ -51,14 +47,14 @@ function rankVoice(v) {
 function pickBestVoice(voices) {
   if (!voices || !voices.length) return null;
 
-  // If user chose a specific voice earlier, honor it
+  // Honor saved preference
   const prefName = localStorage.getItem(VOICE_PREF_KEY);
   if (prefName) {
     const chosen = voices.find(v => v.name === prefName);
     if (chosen) return chosen;
   }
 
-  // Otherwise, pick highest-ranked (with our scoring)
+  // Else highest-ranked
   let best = null;
   let bestScore = -Infinity;
   for (const v of voices) {
@@ -80,7 +76,6 @@ function ensureVoicesReady() {
         voicesLoaded = true;
         resolve();
       } else {
-        // Retry shortly (Chrome sometimes fills voices async)
         setTimeout(tryLoad, 100);
       }
     };
@@ -88,22 +83,11 @@ function ensureVoicesReady() {
   });
 }
 
+// ---- Public API ----
+
+// Simple speak (does not await)
 async function speakText(text) {
-  if (!('speechSynthesis' in window)) {
-    alert('Text-to-Speech not supported in this browser');
-    return;
-  }
-  await ensureVoicesReady();
-
-  stopSpeaking();
-
-  utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = bestVoice?.lang || 'en-US';
-  utterance.rate = 0.9;
-  utterance.pitch = 1.0;
-  if (bestVoice) utterance.voice = bestVoice;
-
-  window.speechSynthesis.speak(utterance);
+  await speakTextAndWait(text);
 }
 
 function stopSpeaking() {
@@ -112,7 +96,28 @@ function stopSpeaking() {
   }
 }
 
-// ✅ Return TOP 5 FEMALE (heuristic) voice names; fallback to top 5 overall
+// ✅ Speak and resolve when finished (use this for correct mic timing)
+async function speakTextAndWait(text) {
+  if (!('speechSynthesis' in window)) return;
+
+  await ensureVoicesReady();
+  stopSpeaking();
+
+  return new Promise(resolve => {
+    utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = bestVoice?.lang || 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    if (bestVoice) utterance.voice = bestVoice;
+
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve(); // resolve to avoid blocking flow on errors
+
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
+// Return TOP 5 FEMALE voice names; fallback to top 5 overall
 async function getVoiceNames() {
   if (!('speechSynthesis' in window)) return [];
   await ensureVoicesReady();
@@ -138,7 +143,7 @@ function setPreferredVoiceByName(name) {
   return false;
 }
 
-// Keep bestVoice fresh if voices change
+// Refresh bestVoice if voices change and no explicit preference is set
 if ('speechSynthesis' in window) {
   window.speechSynthesis.onvoiceschanged = () => {
     if (!voicesLoaded) return;
