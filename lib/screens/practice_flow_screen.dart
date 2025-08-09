@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../widgets/home_app_bar.dart';
+import '../widgets/half_donut_gauge.dart';
 import '../utils/assessment.dart';
 import '../services/speech_service.dart';
 import '../services/tts_service.dart';
-import 'progress_screen.dart';
+import 'session_complete_screen.dart';
 
 enum PromptKind { introSentence, word, shortSentence }
 
@@ -70,10 +71,12 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   String heard = '';
   AssessmentResult? lastAssessment;
 
-  // We’ll do 2 cycles: [intro] → [word, short sentence] x2 → progress
-  int cyclesCompleted = 0;
+  // session scoring (aggregate shown on final page)
+  final List<int> sessionScores = [];
+
+  // We’ll do 2 pairs: [intro] → [word, short sentence] x2 → then user can tap Done
+  int cyclesCompleted = 0; // counts completed pairs (word+short sentence)
   final int maxCycles = 2;
-  final List<int> scores = [];
 
   @override
   void initState() {
@@ -93,12 +96,12 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     setState(() {
       heard = text;
       lastAssessment = result;
-      scores.add(result.accuracyPercent.round());
+      sessionScores.add(result.accuracyPercent.round());
       isListening = false;
     });
   }
 
-  void _toggle() {
+  void _toggleRecord() {
     if (isListening) {
       _speech.stop();
       setState(() => isListening = false);
@@ -114,8 +117,17 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
   void _speakPrompt() => _tts.speak(prompt);
 
-  void _nextStep() {
-    // Decide next prompt based on last assessment
+  bool get _justFinishedPair =>
+      kind == PromptKind.shortSentence && lastAssessment != null;
+
+  bool get _hasNextStep {
+    // there is a "next" unless we have completed maxCycles AND we're at the end of a pair
+    if (_justFinishedPair && cyclesCompleted >= maxCycles) return false;
+    return true;
+  }
+
+  void _goNext() {
+    // Decide next prompt based on last assessment (weakest sound)
     if (lastAssessment != null) {
       targetSound = lastAssessment!.targetSound;
     }
@@ -137,18 +149,19 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         break;
 
       case PromptKind.shortSentence:
+        // Finished a pair
         cyclesCompleted += 1;
+
         if (cyclesCompleted >= maxCycles) {
-          // Done → progress
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProgressScreen(scores: scores, sound: targetSound),
-            ),
-          );
+          // We’re at the end of the planned session.
+          // Do NOT auto-navigate. The "Done" button will take them to the final page.
+          setState(() {
+            // Keep the current prompt/results visible; buttons will show "Done".
+          });
           return;
         }
-        // Start a new cycle: new word (may update targetSound from last assessment)
+
+        // Start a new cycle with a new word (may be different sound)
         kind = PromptKind.word;
         lastWord = _pickRandom(wordsBySound[targetSound] ?? ['practice']);
         prompt = lastWord;
@@ -159,6 +172,15 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       heard = '';
       lastAssessment = null;
     });
+  }
+
+  void _goDone() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SessionCompleteScreen(scores: sessionScores),
+      ),
+    );
   }
 
   String _title() {
@@ -197,34 +219,15 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      tooltip: 'Hear it',
-                      onPressed: _speakPrompt,
-                      icon: const Icon(Icons.volume_up),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                ElevatedButton(
-                  onPressed: _toggle,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: Colors.black, width: 2),
-                    ),
-                  ),
-                  child: Text(isListening ? 'Stop' : 'Start'),
+                IconButton(
+                  tooltip: 'Hear it',
+                  onPressed: _speakPrompt,
+                  icon: const Icon(Icons.volume_up),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+
+                // Transcript
                 const Text('You said:', style: TextStyle(fontSize: 18)),
                 const SizedBox(height: 6),
                 Text(
@@ -233,33 +236,81 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                   textAlign: TextAlign.center,
                 ),
 
+                // Accuracy as half-donut (no encouragement here)
                 if (lastAssessment != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Accuracy: ${lastAssessment!.accuracyPercent.toStringAsFixed(0)}%',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _encouragement(lastAssessment!.accuracyPercent),
-                    style: const TextStyle(color: Colors.green, fontStyle: FontStyle.italic),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      OutlinedButton(
-                        onPressed: _nextStep,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                          side: const BorderSide(color: Colors.black, width: 2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text('Next', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ],
+                  const SizedBox(height: 18),
+                  HalfDonutGauge(
+                    percent: lastAssessment!.accuracyPercent,
+                    size: 300,
+                    thickness: 40,
                   ),
                 ],
+
+                // Encouragement ONLY after each pair
+                if (_justFinishedPair && lastAssessment != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _encouragement(lastAssessment!.accuracyPercent),
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontStyle: FontStyle.italic,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 28),
+
+                // Bottom buttons: Repeat + Next/Done
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Repeat (or Stop while recording)
+                    ElevatedButton.icon(
+                      onPressed: _toggleRecord,
+                      icon: Icon(isListening ? Icons.stop : Icons.replay, color: Colors.black),
+                      label: Text(isListening ? 'Stop' : 'Repeat',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, color: Colors.black)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Colors.black, width: 2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Next (or Done if session complete)
+                    ElevatedButton.icon(
+                      onPressed: lastAssessment == null
+                          ? null
+                          : (_hasNextStep ? _goNext : _goDone),
+                      icon: Icon(_hasNextStep ? Icons.arrow_forward : Icons.check,
+                          color: lastAssessment == null ? Colors.black45 : Colors.black),
+                      label: Text(_hasNextStep ? 'Next' : 'Done',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: lastAssessment == null ? Colors.black45 : Colors.black,
+                          )),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Colors.black, width: 2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
