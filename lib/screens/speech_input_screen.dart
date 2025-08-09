@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/speech_service.dart';
+import '../utils/assessment.dart';
 import 'exercise_screen.dart';
 
 class SpeechInputScreen extends StatefulWidget {
@@ -12,7 +13,6 @@ class SpeechInputScreen extends StatefulWidget {
 class _SpeechInputScreenState extends State<SpeechInputScreen> {
   final SpeechService _speechService = SpeechService();
 
-  // Sentences grouped by target sound. Add/remove as you like.
   final Map<String, List<String>> _sentences = {
     'R': [
       'The red rabbit ran rapidly.',
@@ -40,37 +40,31 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
   String _spokenText = '';
   bool _isListening = false;
 
+  AssessmentResult? _assessment; // set after user speaks
+
   @override
   void initState() {
     super.initState();
 
-    // Default UI sentence before any analysis.
     _currentSentence = _sentences[_currentSound]!.first;
 
-    // Initialize speech service and set the callback.
     _speechService.init(onResult: (text) {
       setState(() {
         _spokenText = text;
         _isListening = false;
       });
 
-      // Analyze and navigate to exercise for the detected sound.
-      final sound = _analyze(text);
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => ExerciseScreen(sound: sound)),
+      // Run real assessment on the recognized text vs. the prompted sentence
+      final result = assessRecording(
+        promptedSentence: _currentSentence,
+        recognizedText: text,
       );
-    });
-  }
 
-  // Super-simple heuristic. Replace with real phoneme analysis later.
-  String _analyze(String input) {
-    final lower = input.toLowerCase();
-    if (lower.contains('sh')) return 'Sh';
-    if (lower.contains('s')) return 'S';
-    if (lower.contains('r')) return 'R';
-    // Fallback: keep current sound
-    return _currentSound;
+      setState(() {
+        _assessment = result;
+        _currentSound = result.targetSound; // use the assessed target going forward
+      });
+    });
   }
 
   void _toggleListening() {
@@ -84,12 +78,51 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
   }
 
   void _newSentence() {
-    // Shuffle within the current sound’s list.
-    final list = List<String>.from(_sentences[_currentSound]!);
+    // Shuffle a sentence for the CURRENT sound we plan to practice
+    final list = List<String>.from(_sentences[_currentSound] ?? ['Practice makes perfect!']);
     list.shuffle();
     setState(() {
       _currentSentence = list.first;
+      _assessment = null; // reset prior result when changing prompt
+      _spokenText = '';
     });
+  }
+
+  Widget _buildAssessmentCard(AssessmentResult a) {
+    String encour = "Good job!";
+    if (a.accuracyPercent < 70) encour = "Nice try!";
+    else if (a.accuracyPercent < 85) encour = "You're getting better!";
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(top: 20),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text('Accuracy: ${a.accuracyPercent}%',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Text(encour, style: const TextStyle(color: Colors.green, fontStyle: FontStyle.italic)),
+            const SizedBox(height: 10),
+            Text('We’ll practice "${a.targetSound}" next.',
+                style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ExerciseScreen(sound: a.targetSound),
+                  ),
+                );
+              },
+              child: const Text('Continue to practice'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -107,17 +140,17 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             TextButton(
               onPressed: _isListening ? null : _newSentence,
               child: const Text('New sentence'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _toggleListening,
               child: Text(_isListening ? 'Stop' : 'Start'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             const Text('You said:', style: TextStyle(fontSize: 18)),
             const SizedBox(height: 8),
             Text(
@@ -125,6 +158,7 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
               style: const TextStyle(fontSize: 20, color: Colors.blueAccent),
               textAlign: TextAlign.center,
             ),
+            if (_assessment != null) _buildAssessmentCard(_assessment!),
           ],
         ),
       ),
