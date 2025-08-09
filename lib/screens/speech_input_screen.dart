@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/centered_page.dart';
 import '../services/speech_service.dart';
+import '../services/tts_service.dart'; // ✅ TTS import
 import '../utils/assessment.dart';
 import 'exercise_screen.dart';
 
@@ -12,11 +13,24 @@ class SpeechInputScreen extends StatefulWidget {
 
 class _SpeechInputScreenState extends State<SpeechInputScreen> {
   final SpeechService _speechService = SpeechService();
+  final TtsService _tts = TtsService(); // ✅ TTS instance
 
   final Map<String, List<String>> _sentences = {
-    'R': ['The red rabbit ran rapidly.', 'Rachel rode the roller coaster.', 'Rain rushed down the river.'],
-    'S': ['Sally sells seashells by the seashore.', 'Seven snakes slither silently.', 'Sam saw seven seagulls.'],
-    'Sh': ['The ship sails in the shining sun.', 'She shouted to her friends.', 'Shiny shoes should stay clean.'],
+    'R': [
+      'The red rabbit ran rapidly.',
+      'Rachel rode the roller coaster.',
+      'Rain rushed down the river.'
+    ],
+    'S': [
+      'Sally sells seashells by the seashore.',
+      'Seven snakes slither silently.',
+      'Sam saw seven seagulls.'
+    ],
+    'Sh': [
+      'The ship sails in the shining sun.',
+      'She shouted to her friends.',
+      'Shiny shoes should stay clean.'
+    ],
   };
 
   String _currentSound = 'R';
@@ -31,8 +45,14 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
     super.initState();
     _currentSentence = _sentences[_currentSound]!.first;
 
+    // ✅ Init TTS
+    _tts.init();
+
     _speechService.init(onResult: (text) {
-      final result = assessRecording(promptedSentence: _currentSentence, recognizedText: text);
+      final result = assessRecording(
+        promptedSentence: _currentSentence,
+        recognizedText: text,
+      );
       setState(() {
         _spokenText = text;
         _assessment = result;
@@ -58,7 +78,9 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
 
   void _newSentence() {
     if (_isListening) return;
-    final list = List<String>.from(_sentences[_currentSound] ?? ['Practice makes perfect!'])..shuffle();
+    final list = List<String>.from(
+      _sentences[_currentSound] ?? ['Practice makes perfect!'],
+    )..shuffle();
     setState(() {
       _currentSentence = list.first;
       _spokenText = '';
@@ -70,6 +92,7 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
     String encour = "Good job!";
     if (a.accuracyPercent < 70) encour = "Nice try!";
     else if (a.accuracyPercent < 85) encour = "You're getting better!";
+
     return Container(
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
@@ -80,13 +103,22 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
       ),
       child: Column(
         children: [
-          Text('Accuracy: ${a.accuracyPercent}%', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+          Text(
+            'Accuracy: ${a.accuracyPercent}%',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 6),
-          Text(encour, style: const TextStyle(color: Colors.green, fontStyle: FontStyle.italic)),
+          Text(
+            encour,
+            style: const TextStyle(color: Colors.green, fontStyle: FontStyle.italic),
+          ),
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => ExerciseScreen(sound: a.targetSound)));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ExerciseScreen(sound: a.targetSound)),
+              );
             },
             child: Text('Practice "${a.targetSound}"'),
           ),
@@ -109,7 +141,24 @@ class _SpeechInputScreenState extends State<SpeechInputScreen> {
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
-          TextButton(onPressed: _newSentence, child: const Text('New sentence')),
+
+          // ✅ Hear it + New sentence row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                tooltip: 'Hear it',
+                onPressed: () => _tts.speak(_currentSentence),
+                icon: const Icon(Icons.volume_up),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _newSentence,
+                child: const Text('New sentence'),
+              ),
+            ],
+          ),
+
           const SizedBox(height: 8),
           ElevatedButton(
             onPressed: _toggleListening,
