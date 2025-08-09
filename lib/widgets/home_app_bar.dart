@@ -3,7 +3,8 @@ import '../screens/welcome_screen.dart';
 
 class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? title;
-  const HomeAppBar({super.key, this.title});
+  final List<Widget>? actions; // ✅ allow custom actions (e.g., Done/X)
+  const HomeAppBar({super.key, this.title, this.actions});
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -22,8 +23,9 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
             (_) => false,
           );
         },
-        icon: const Icon(Icons.home, color: Colors.black),
+        icon: const Icon(Icons.home_outlined, color: Colors.black),
       ),
+      actions: actions,
       title: title == null
           ? null
           : Text(title!, style: const TextStyle(color: Colors.black)),
