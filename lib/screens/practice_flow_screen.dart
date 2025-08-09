@@ -44,7 +44,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     'Sh': ['ship', 'shoe', 'shell', 'shark', 'shadow'],
   };
 
-  // Short sentence templates include \$WORD and stay short
+  // Short sentence templates include \$WORD
   final Map<String, List<String>> shortSentenceTpl = {
     'R': [
       'The \$WORD is ready.',
@@ -83,8 +83,10 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   static const double _donutHeight = _donutSize / 2; // half circle
   static const double _transcriptHeight = 56; // fixed-height placeholder
 
-  // 🔊 Autoplay TTS setting (sticky)
+  // 🔊 Autoplay TTS (sticky)
   bool _autoplayTts = true;
+
+  bool _didKickoff = false; // ensure first auto-kickoff happens once
 
   @override
   void initState() {
@@ -92,11 +94,26 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     _tts.init();
     _speech.init(onResult: _onHeard);
 
-    // Pick a random intro sentence across sounds for variety
+    // Pick a random intro sentence across sounds
     final sounds = introSentences.keys.toList()..shuffle();
     targetSound = sounds.first;
     final list = List<String>.from(introSentences[targetSound]!)..shuffle();
     prompt = list.first;
+
+    // Auto-play prompt then auto-start practice on first load
+    WidgetsBinding.instance.addPostFrameCallback((_) => _kickoffIfNeeded());
+  }
+
+  Future<void> _kickoffIfNeeded() async {
+    if (_didKickoff) return;
+    _didKickoff = true;
+
+    if (_autoplayTts) {
+      _speakPrompt();
+      await Future.delayed(const Duration(milliseconds: 900));
+    }
+    setState(() => isListening = true);
+    _speech.start();
   }
 
   void _onHeard(String text) {
@@ -157,12 +174,11 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         cyclesCompleted += 1;
 
         if (cyclesCompleted >= maxCycles) {
-          // End of planned session. "Done" (X) will end session.
-          setState(() {}); // keep results on screen
+          setState(() {}); // end of session planned; show Done (X) only
           return;
         }
 
-        // Start a new cycle with a new word (may be different sound)
+        // Next cycle
         kind = PromptKind.word;
         lastWord = _pickRandom(wordsBySound[targetSound] ?? ['practice']);
         prompt = lastWord;
@@ -173,18 +189,15 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     setState(() {
       heard = '';
       lastAssessment = null;
-      isListening = false; // flip to true after (maybe) speaking
+      isListening = false;
     });
 
-    // 🔊 Autoplay: speak first, then auto-start practice
+    // 🔊 Auto-play then auto-start recording (Practice)
     if (_autoplayTts) {
       _speakPrompt();
       await Future.delayed(const Duration(milliseconds: 900));
     }
-
-    setState(() {
-      isListening = true;
-    });
+    setState(() => isListening = true);
     _speech.start();
   }
 
@@ -213,31 +226,31 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     return copy.first;
   }
 
-  Widget _autoplayToggle() {
-    // Two outlined buttons: On / Off
-    final onSelected = _autoplayTts;
-    final offSelected = !_autoplayTts;
-
-    OutlinedButton _btn({
+  Widget _autoplayToggleIcons() {
+    // Two ICONS ONLY: speaker on / speaker off (crossed)
+    Widget _iconSel({
       required bool selected,
       required IconData icon,
-      required String label,
-      required VoidCallback onPressed,
+      required VoidCallback onTap,
     }) {
-      return OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, color: selected ? Colors.black : Colors.black45),
-        label: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.black : Colors.black45,
-            fontWeight: FontWeight.bold,
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.black,
+              width: selected ? 3 : 2,
+            ),
           ),
-        ),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          side: BorderSide(color: Colors.black, width: selected ? 3 : 2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Icon(
+            icon,
+            color: selected ? Colors.black : Colors.black45,
+          ),
         ),
       );
     }
@@ -245,18 +258,17 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _btn(
-          selected: onSelected,
+        _iconSel(
+          selected: _autoplayTts,
           icon: Icons.volume_up_outlined,
-          label: 'Speaker On',
-          onPressed: () => setState(() => _autoplayTts = true),
+          onTap: () => setState(() => _autoplayTts = true),
         ),
-        const SizedBox(width: 8),
-        _btn(
-          selected: offSelected,
+        const SizedBox(width: 12),
+        _iconSel(
+          selected: !_autoplayTts,
+          // crossed-out speaker
           icon: Icons.volume_off_outlined,
-          label: 'Speaker Off',
-          onPressed: () => setState(() => _autoplayTts = false),
+          onTap: () => setState(() => _autoplayTts = false),
         ),
       ],
     );
@@ -294,8 +306,9 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                 ),
 
                 const SizedBox(height: 10),
-                // 🔊 Autoplay toggle (speaker on/off)
-                _autoplayToggle(),
+
+                // 🔊 Speaker On/Off icons (sticky preference)
+                _autoplayToggleIcons(),
 
                 // Transcript placeholder (no label, fixed height)
                 const SizedBox(height: 16),
