@@ -241,7 +241,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                   const SizedBox(height: 18),
                   HalfDonutGauge(
                     percent: lastAssessment!.accuracyPercent,
-                    size: 300,
+                    size: 150, // was 300
                     thickness: 40,
                   ),
                 ],
@@ -271,41 +271,51 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                     ElevatedButton.icon(
                       onPressed: _toggleRecord,
                       icon: Icon(isListening ? Icons.stop : Icons.play_arrow, color: Colors.black),
-                      label: Text(isListening ? 'Stop' : 'Practice',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, color: Colors.black)),
+                      label: Text(
+                        isListening ? 'Stop' : 'Practice',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          fontSize: 20, // bigger text
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20), // chunkier
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                           side: const BorderSide(color: Colors.black, width: 2),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-
+                    const SizedBox(width: 16),
+                    
                     // Next (or Done if session complete)
                     ElevatedButton.icon(
                       onPressed: lastAssessment == null
                           ? null
                           : (_hasNextStep ? _goNext : _goDone),
-                      icon: Icon(_hasNextStep ? Icons.arrow_forward : Icons.check,
-                          color: lastAssessment == null ? Colors.black45 : Colors.black),
-                      label: Text(_hasNextStep ? 'Next' : 'Done',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: lastAssessment == null ? Colors.black45 : Colors.black,
-                          )),
+                      icon: Icon(
+                        _hasNextStep ? Icons.arrow_forward : Icons.check,
+                        color: lastAssessment == null ? Colors.black45 : Colors.black,
+                      ),
+                      label: Text(
+                        _hasNextStep ? 'Next' : 'Done',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: lastAssessment == null ? Colors.black45 : Colors.black,
+                          fontSize: 20, // bigger text
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20), // chunkier
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                           side: const BorderSide(color: Colors.black, width: 2),
                         ),
                       ),
