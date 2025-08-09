@@ -43,22 +43,22 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     'Sh': ['ship', 'shoe', 'shell', 'shark', 'shadow'],
   };
 
-  // Short sentence templates include $WORD and stay short
+  // Short sentence templates include \$WORD and stay short
   final Map<String, List<String>> shortSentenceTpl = {
     'R': [
-      'The $WORD is ready.',
-      'We found the $WORD.',
-      'See the $WORD today.',
+      'The \$WORD is ready.',
+      'We found the \$WORD.',
+      'See the \$WORD today.',
     ],
     'S': [
-      'The $WORD is shiny.',
-      'I see the $WORD.',
-      'Small $WORD here.',
+      'The \$WORD is shiny.',
+      'I see the \$WORD.',
+      'Small \$WORD here.',
     ],
     'Sh': [
-      'The $WORD is shiny.',
-      'She has a $WORD.',
-      'Show the $WORD.',
+      'The \$WORD is shiny.',
+      'She has a \$WORD.',
+      'Show the \$WORD.',
     ],
   };
 
@@ -131,7 +131,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       case PromptKind.word:
         // Use a short sentence template that includes the word
         kind = PromptKind.shortSentence;
-        final tplList = shortSentenceTpl[targetSound] ?? ['Say $WORD clearly.'];
+        final tplList = shortSentenceTpl[targetSound] ?? ['Say \$WORD clearly.'];
         final tpl = _pickRandom(tplList);
         prompt = tpl.replaceAll('\$WORD', lastWord);
         break;
