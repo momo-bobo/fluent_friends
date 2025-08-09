@@ -1,0 +1,66 @@
+{
+  "sounds": {
+    "R": {
+      "words": {
+        "initial": ["rabbit", "rain", "river", "rocket", "rope", "radio", "roof", "ring", "ruler", "rainbow", "raccoon", "raisin", "rafter", "raider", "robot"],
+        "medial": ["carrot", "parrot", "hero", "cereal", "mirror", "berry", "forest", "pirate", "zero", "cherry", "orange", "around", "arena", "arrowhead", "syrup"],
+        "final": ["car", "star", "bear", "ear", "door", "chair", "flower", "color", "guitar", "soccer", "paper", "timer", "tiger", "dollar", "butter"]
+      },
+      "intro_sentences": [
+        "The red rabbit ran rapidly.",
+        "Rachel rode the roller coaster.",
+        "Rain rushed down the river."
+      ],
+      "short_sentences": [
+        "The $WORD is ready.",
+        "We found the $WORD.",
+        "See the $WORD today.",
+        "Point to the $WORD.",
+        "Touch the $WORD now."
+      ],
+      "tags": ["liquid", "english"]
+    },
+    "S": {
+      "words": {
+        "initial": ["sun", "sand", "sock", "soup", "seal", "seed", "seat", "soap", "soda", "silly", "simple", "seven", "city", "sail", "same"],
+        "medial": ["pencil", "dancer", "bison", "whistle", "castle", "lesson", "basin", "beside", "fossil", "hiking", "pasta", "desert", "missing", "glasses", "vessel"],
+        "final": ["bus", "class", "glass", "house", "mouse", "juice", "grass", "dress", "ice", "moose", "boss", "face", "goose", "chess", "moose"]
+      },
+      "intro_sentences": [
+        "Sally sells seashells by the seashore.",
+        "Seven snakes slither silently.",
+        "Sam saw seven seagulls."
+      ],
+      "short_sentences": [
+        "I see the $WORD.",
+        "Show me the $WORD.",
+        "The $WORD is shiny.",
+        "Place the $WORD here.",
+        "Point at the $WORD."
+      ],
+      "tags": ["fricative", "english"]
+    },
+    "Sh": {
+      "words": {
+        "initial": ["ship", "shoe", "shell", "shark", "shadow", "short", "shovel", "shower", "sugar", "sheet", "shape", "shop", "shore", "shine", "shoulder"],
+        "medial": ["fishing", "washing", "mushroom", "tissue", "ocean", "lotion", "sunshine", "brushing", "dishwasher", "seashell", "flashing", "cushion", "rushing", "nation", "motion"],
+        "final": ["fish", "brush", "dish", "flash", "cash", "bush", "crash", "trash", "wish", "push", "wash", "rash", "finish", "splash", "fresh"]
+      },
+      "intro_sentences": [
+        "The ship sails in the shining sun.",
+        "She shouted to her friends.",
+        "Shiny shoes should stay clean."
+      ],
+      "short_sentences": [
+        "Hold the $WORD.",
+        "Find the $WORD.",
+        "The $WORD is here.",
+        "Point to the $WORD.",
+        "Look at the $WORD."
+      ],
+      "tags": ["postalveolar", "english"]
+    }
+  },
+  "template_notes": "Use $WORD in short_sentences; pick from initial/medial/final as needed.",
+  "version": 1
+}
