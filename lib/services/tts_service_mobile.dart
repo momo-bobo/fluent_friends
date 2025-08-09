@@ -13,22 +13,17 @@ class TtsService {
     final voices = await _tts.getVoices;
     final list = (voices is List) ? voices.cast<dynamic>() : <dynamic>[];
 
-    // pick a best voice if none chosen
-    if (_preferredVoiceName == null && list.isNotEmpty) {
-      final best = _pickBestVoice(list);
+    // Apply preferred voice if any, else pick best female (or best overall)
+    if (_preferredVoiceName != null) {
+      final match = _findByName(list, _preferredVoiceName!);
+      if (match != null) {
+        await _tts.setVoice(match);
+      }
+    } else if (list.isNotEmpty) {
+      final best = _pickBestVoice(list, preferFemale: true);
       if (best != null) {
         await _tts.setVoice(best);
         _preferredVoiceName = best['name']?.toString();
-      }
-    } else if (_preferredVoiceName != null) {
-      // try to apply preferred voice by name
-      final match = list
-          .map((v) => Map<String, dynamic>.from(v as Map))
-          .firstWhere(
-              (m) => (m['name'] ?? '').toString() == _preferredVoiceName,
-              orElse: () => {});
-      if (match.isNotEmpty) {
-        await _tts.setVoice(match);
       }
     }
   }
@@ -42,56 +37,100 @@ class TtsService {
     await _tts.stop();
   }
 
+  // Return TOP 5 FEMALE names (if gender available), else heuristic by name; fallback to top 5 overall.
   Future<List<String>> listVoices() async {
     final voices = await _tts.getVoices;
-    final list = (voices is List) ? voices.cast<dynamic>() : <dynamic>[];
-    return list
+    final raw = (voices is List) ? voices.cast<dynamic>() : <dynamic>[];
+
+    // Score and sort
+    final scored = raw
         .map((v) => Map<String, dynamic>.from(v as Map))
-        .map((m) => (m['name'] ?? '').toString())
-        .where((name) => name.isNotEmpty)
+        .map((m) => {'m': m, 's': _score(m)})
+        .toList()
+      ..sort((a, b) => (b['s'] as int).compareTo(a['s'] as int));
+
+    // Filter female first (gender='female' or name heuristic)
+    List<Map<String, dynamic>> female = scored
+        .where((e) => _isFemale(e['m']))
+        .map((e) => e['m'] as Map<String, dynamic>)
         .toList();
+
+    final top = (female.isNotEmpty ? female : scored.map((e) => e['m'] as Map<String, dynamic>).toList())
+        .take(5)
+        .map((m) => (m['name'] ?? '').toString())
+        .where((n) => n.isNotEmpty)
+        .toList();
+
+    return top;
   }
 
   Future<bool> setPreferredVoice(String name) async {
     _preferredVoiceName = name;
     final voices = await _tts.getVoices;
-    final list = (voices is List) ? voices.cast<dynamic>() : <dynamic>[];
-    final match = list
-        .map((v) => Map<String, dynamic>.from(v as Map))
-        .firstWhere((m) => (m['name'] ?? '').toString() == name,
-            orElse: () => {});
-    if (match.isNotEmpty) {
+    final raw = (voices is List) ? voices.cast<dynamic>() : <dynamic>[];
+    final match = _findByName(raw, name);
+    if (match != null) {
       await _tts.setVoice(match);
       return true;
     }
     return false;
   }
 
-  Map<String, dynamic>? _pickBestVoice(List<dynamic> raw) {
+  Map<String, dynamic>? _findByName(List<dynamic> raw, String name) {
+    for (final v in raw) {
+      final m = Map<String, dynamic>.from(v as Map);
+      if ((m['name'] ?? '').toString() == name) return m;
+    }
+    return null;
+  }
+
+  // Score similar to web
+  int _score(Map<String, dynamic> m) {
+    int score = 0;
+    final name = (m['name'] ?? '').toString().toLowerCase();
+    final locale = (m['locale'] ?? '').toString().toLowerCase();
+
+    if (locale == 'en-us') score += 6;
+    else if (locale.startsWith('en-')) score += 4;
+    else if (locale.startsWith('en')) score += 3;
+
+    if (name.contains('google')) score += 4;
+    if (name.contains('microsoft')) score += 4;
+    if (name.contains('apple') || name.contains('siri')) score += 3;
+    if (name.contains('wavenet') || name.contains('neural') || name.contains('natural')) score += 3;
+
+    if (name.contains('default') || name.contains('basic') || name.contains('compact')) score -= 3;
+
+    if (_isFemale(m)) score += 3;
+
+    return score;
+  }
+
+  bool _isFemale(Map<String, dynamic> m) {
+    final gender = (m['gender'] ?? '').toString().toLowerCase();
+    if (gender == 'female') return true;
+    final name = (m['name'] ?? '').toString().toLowerCase();
+    const femaleHints = [
+      'female', 'woman', 'girl',
+      'aria', 'jessa', 'jenny', 'emma', 'lisa', 'sara', 'sarah', 'salli', 'joanna', 'ivy', 'zoe', 'zoey'
+    ];
+    return femaleHints.any((h) => name.contains(h));
+  }
+
+  Map<String, dynamic>? _pickBestVoice(List<dynamic> raw, {bool preferFemale = false}) {
     Map<String, dynamic>? best;
     int bestScore = -999;
 
     for (final v in raw) {
-      final map = Map<String, dynamic>.from(v as Map);
-      final name = (map['name'] ?? '').toString();
-      final locale = (map['locale'] ?? '').toString().toLowerCase();
-
-      int score = 0;
-      if (locale == 'en-us') score += 6;
-      else if (locale.startsWith('en-')) score += 4;
-      else if (locale.startsWith('en')) score += 3;
-
-      final lname = name.toLowerCase();
-      if (lname.contains('google')) score += 4;
-      if (lname.contains('microsoft')) score += 4;
-      if (lname.contains('apple') || lname.contains('siri')) score += 3;
-      if (lname.contains('wavenet') || lname.contains('neural') || lname.contains('natural')) score += 3;
-
-      if (lname.contains('default') || lname.contains('basic') || lname.contains('compact')) score -= 3;
-
-      if (score > bestScore) {
-        best = map;
-        bestScore = score;
+      final m = Map<String, dynamic>.from(v as Map);
+      int s = _score(m);
+      if (preferFemale && !_isFemale(m)) {
+        // small nudge to favor female when tie
+        s -= 1;
+      }
+      if (s > bestScore) {
+        best = m;
+        bestScore = s;
       }
     }
     return best;
