@@ -46,6 +46,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   bool _autoplayTts = true;
   bool _didKickoff = false;
 
+  // Mic level (currently not driving the painter; kept for future)
   double _micLevel = 0.0;
 
   @override
@@ -91,14 +92,12 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       lastAssessment = null;
       isListening = true;
     });
-    _tones.playStartDing();
+    await _tones.playStartDing();
     if (kIsWeb) {
-      await TonesService.startMicLevelStream(
+      await _tones.startMicLevelStream(
         onLevel: (lvl) {
           if (!mounted) return;
-          setState(() {
-            _micLevel = lvl.clamp(0.0, 1.0);
-          });
+          setState(() => _micLevel = lvl.clamp(0.0, 1.0));
         },
       );
     }
@@ -107,9 +106,9 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
   Future<void> _stopListening() async {
     _speech.stop();
-    _tones.playStopDing();
+    await _tones.playStopDing();
     if (kIsWeb) {
-      await TonesService.stopMicLevelStream();
+      await _tones.stopMicLevelStream();
       setState(() => _micLevel = 0.0);
     }
     setState(() => isListening = false);
@@ -138,17 +137,12 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   bool get _justFinishedPair =>
       kind == PromptKind.shortSentence && lastAssessment != null;
 
-  bool get _hasNextStep {
-    if (_justFinishedPair && cyclesCompleted >= maxCycles) return false;
-    return true;
-  }
-
   Future<void> _goNext() async {
+    // Choose next step informed by last assessment (weakest sound), fallback safe
     if (lastAssessment != null) {
-      targetSound = lastAssessment!.targetSound;
-      // if target sound not in content (edge), keep current
-      if (!_content.hasSound(targetSound)) {
-        targetSound = _content.randomSoundKey();
+      final suggested = lastAssessment!.targetSound;
+      if (_content.hasSound(suggested)) {
+        targetSound = suggested;
       }
     }
 
@@ -158,14 +152,16 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         lastWord = _content.randomWord(targetSound);
         prompt = lastWord;
         break;
+
       case PromptKind.word:
         kind = PromptKind.shortSentence;
         prompt = _content.shortSentenceWithWord(targetSound, lastWord);
         break;
+
       case PromptKind.shortSentence:
         cyclesCompleted += 1;
         if (cyclesCompleted >= maxCycles) {
-          setState(() {}); // end of planned session; Done (X) only
+          setState(() {}); // Planned end; Done (X) finishes session
           return;
         }
         kind = PromptKind.word;
@@ -206,7 +202,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     }
   }
 
-  // 🔊 Voice chooser (AppBar "Voice…")
+  // Voice Picker (AppBar "Voice…")
   Future<void> _pickVoice() async {
     final voices = await _tts.listVoices();
     if (!mounted) return;
@@ -254,6 +250,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     }
   }
 
+  // Speaker On/Off icons (selected has black border; unselected none)
   Widget _speakerToggleIcons() {
     Widget _iconSel({
       required bool selected,
@@ -304,15 +301,13 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         backgroundColor: Colors.white,
         appBar: HomeAppBar(
           title: 'Loading…',
-          actions: [
-            TextButton(
-              onPressed: () {},
-              child: const Text('Voice…', style: TextStyle(color: Colors.black)),
-            ),
+          actions: const [
+            // Disabled while loading
+            TextButton(onPressed: null, child: Text('Voice…', style: TextStyle(color: Colors.black54))),
             IconButton(
               tooltip: 'Done',
-              onPressed: () {},
-              icon: const Icon(Icons.close_outlined, color: Colors.black),
+              onPressed: null,
+              icon: Icon(Icons.close_outlined, color: Colors.black54),
             ),
           ],
         ),
@@ -322,6 +317,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
+      // Top-left Home, top-right Voice… then Done (X)
       appBar: HomeAppBar(
         title: _title(),
         actions: [
