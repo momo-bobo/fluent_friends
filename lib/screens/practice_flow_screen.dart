@@ -267,10 +267,11 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Repeat (or Stop while recording)
+                    // Practice (or Stop while recording)
                     ElevatedButton.icon(
                       onPressed: _toggleRecord,
-                      icon: Icon(isListening ? Icons.stop : Icons.replay, color: Colors.black),
-                      label: Text(isListening ? 'Stop' : 'Repeat',
+                      icon: Icon(isListening ? Icons.stop : Icons.play_arrow, color: Colors.black),
+                      label: Text(isListening ? 'Stop' : 'Practice',
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, color: Colors.black)),
                       style: ElevatedButton.styleFrom(
