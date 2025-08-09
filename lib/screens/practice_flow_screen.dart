@@ -19,7 +19,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   final SpeechService _speech = SpeechService();
   final TtsService _tts = TtsService();
 
-  // Banks
+  // Content banks (will move to JSON later)
   final Map<String, List<String>> introSentences = {
     'R': [
       'The red rabbit ran rapidly.',
@@ -71,7 +71,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   String heard = '';
   AssessmentResult? lastAssessment;
 
-  // session scoring (aggregate shown on final page)
+  // Session scoring (aggregate shown on final page)
   final List<int> sessionScores = [];
 
   // 2 pairs by default: [intro] → [word + short sentence] x2 → user taps Done
@@ -109,8 +109,9 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     _didKickoff = true;
 
     if (_autoplayTts) {
-      _speakPrompt();
-      await Future.delayed(const Duration(milliseconds: 900));
+      await _tts.stop();
+      // IMPORTANT: wait for TTS to finish before recording
+      await _tts.speakAndWait(prompt);
     }
     setState(() => isListening = true);
     _speech.start();
@@ -194,8 +195,8 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
     // 🔊 Auto-play then auto-start recording (Practice)
     if (_autoplayTts) {
-      _speakPrompt();
-      await Future.delayed(const Duration(milliseconds: 900));
+      await _tts.stop();
+      await _tts.speakAndWait(prompt);
     }
     setState(() => isListening = true);
     _speech.start();
@@ -226,7 +227,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     return copy.first;
   }
 
-  // 🔊 Voice chooser (top-right "Voice…")
+  // 🔊 Voice chooser (AppBar "Voice…")
   Future<void> _pickVoice() async {
     final voices = await _tts.listVoices();
     if (!mounted) return;
@@ -399,92 +400,4 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                   const SizedBox(height: 10),
                   Text(
                     _encouragement(lastAssessment!.accuracyPercent),
-                    style: const TextStyle(
-                      color: Colors.green,
-                      fontStyle: FontStyle.italic,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 28),
-
-                // Bottom buttons: Practice + Next
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Practice (or Stop while recording)
-                    ElevatedButton.icon(
-                      onPressed: _toggleRecord,
-                      icon: Icon(
-                        isListening ? Icons.stop_outlined : Icons.play_arrow_outlined,
-                        color: Colors.black,
-                      ),
-                      label: const Text(
-                        'Practice',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                          fontSize: 20,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-                        minimumSize: const Size(160, 56),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: const BorderSide(color: Colors.black, width: 2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Next (disabled until we have a result)
-                    ElevatedButton.icon(
-                      onPressed: lastAssessment == null ? null : _goNext,
-                      icon: Icon(
-                        Icons.arrow_forward_outlined,
-                        color: lastAssessment == null ? Colors.black45 : Colors.black,
-                      ),
-                      label: Text(
-                        'Next',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: lastAssessment == null ? Colors.black45 : Colors.black,
-                          fontSize: 20,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-                        minimumSize: const Size(160, 56),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: const BorderSide(color: Colors.black, width: 2),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _encouragement(double avg) {
-    if (avg < 25) return "Good start!";
-    if (avg < 50) return "Keep going!";
-    if (avg < 75) return "Nice progress!";
-    if (avg < 90) return "Great job!";
-    return "Fantastic!";
-  }
-}
+                   
