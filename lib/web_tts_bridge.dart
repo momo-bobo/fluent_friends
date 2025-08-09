@@ -9,7 +9,11 @@ external void speakText(String text);
 @JS('stopSpeaking')
 external void stopSpeaking();
 
-// New
+// NEW: returns a JS Promise
+@JS('speakTextAndWait')
+external Object speakTextAndWait(String text);
+
+// already have these if you added voice picking:
 @JS('getVoiceNames')
 external List<dynamic> getVoiceNames();
 
