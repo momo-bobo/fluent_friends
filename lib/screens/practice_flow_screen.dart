@@ -238,13 +238,16 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.black, width: selected ? 3 : 2),
+            border: Border.all(
+              color: selected ? Colors.black : Colors.transparent, // ✅ only selected shows black
+              width: 3, // keep constant width to avoid size shift
+            ),
           ),
           child: Icon(icon, color: selected ? Colors.black : Colors.black45),
         ),
       );
     }
-
+  
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
