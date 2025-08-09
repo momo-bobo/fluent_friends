@@ -368,7 +368,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                 SizedBox(
                   height: _donutHeight,
                   child: isListening
-                      ? const VoiceWave()
+                      ? VoiceWave(level: _micLevel)   // ← pass the live level; no const
                       : (lastAssessment == null
                           ? const SizedBox.shrink()
                           : HalfDonutGauge(
