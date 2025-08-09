@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 class VoiceWave extends StatefulWidget {
   final double level; // 0..1
 
-  const VoiceWave({super.key, required this.level});
+  const VoiceWave({super.key, this.level = 0.0}); // <-- default, not required
 
   @override
   State<VoiceWave> createState() => _VoiceWaveState();
