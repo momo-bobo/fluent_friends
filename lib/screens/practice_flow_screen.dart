@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../widgets/home_app_bar.dart';
 import '../widgets/half_donut_gauge.dart';
+import '../widgets/voice_wave.dart';
 import '../utils/assessment.dart';
 import '../services/speech_service.dart';
 import '../services/tts_service.dart';
+import '../services/tones_service.dart';
 import 'session_complete_screen.dart';
 
 enum PromptKind { introSentence, word, shortSentence }
@@ -18,6 +21,7 @@ class PracticeFlowScreen extends StatefulWidget {
 class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   final SpeechService _speech = SpeechService();
   final TtsService _tts = TtsService();
+  final TonesService _tones = TonesService();
 
   // Content banks (will move to JSON later)
   final Map<String, List<String>> introSentences = {
@@ -88,10 +92,14 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
   bool _didKickoff = false; // ensure first auto-kickoff happens once
 
+  // Live mic level for wave (0..1)
+  double _micLevel = 0.0;
+
   @override
   void initState() {
     super.initState();
     _tts.init();
+    _tones.init();
     _speech.init(onResult: _onHeard);
 
     // Pick a random intro sentence across sounds
@@ -110,11 +118,41 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
     if (_autoplayTts) {
       await _tts.stop();
-      // IMPORTANT: wait for TTS to finish before recording
+      // wait for TTS to finish before recording
       await _tts.speakAndWait(prompt);
     }
-    setState(() => isListening = true);
+    await _startListening();
+  }
+
+  Future<void> _startListening() async {
+    setState(() {
+      heard = '';
+      lastAssessment = null;
+      isListening = true;
+    });
+    _tones.playStartDing();
+    if (kIsWeb) {
+      // start web mic level meter (no-op on mobile)
+      await TonesService.startMicLevelStream(
+        onLevel: (lvl) {
+          if (!mounted) return;
+          setState(() {
+            _micLevel = lvl.clamp(0.0, 1.0);
+          });
+        },
+      );
+    }
     _speech.start();
+  }
+
+  Future<void> _stopListening() async {
+    _speech.stop();
+    _tones.playStopDing();
+    if (kIsWeb) {
+      await TonesService.stopMicLevelStream();
+      setState(() => _micLevel = 0.0);
+    }
+    setState(() => isListening = false);
   }
 
   void _onHeard(String text) {
@@ -123,21 +161,16 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       heard = text;
       lastAssessment = result;
       sessionScores.add(result.accuracyPercent.round());
-      isListening = false;
     });
+    // recording already stopped by recognizer; ensure our UI/sounds follow
+    _stopListening();
   }
 
   void _toggleRecord() {
     if (isListening) {
-      _speech.stop();
-      setState(() => isListening = false);
+      _stopListening();
     } else {
-      setState(() {
-        heard = '';
-        lastAssessment = null;
-        isListening = true;
-      });
-      _speech.start();
+      _startListening();
     }
   }
 
@@ -190,7 +223,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     setState(() {
       heard = '';
       lastAssessment = null;
-      isListening = false;
     });
 
     // 🔊 Auto-play then auto-start recording (Practice)
@@ -198,8 +230,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       await _tts.stop();
       await _tts.speakAndWait(prompt);
     }
-    setState(() => isListening = true);
-    _speech.start();
+    await _startListening();
   }
 
   void _goDone() {
@@ -211,14 +242,14 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     );
   }
 
-  String _title() {
+  String? _title() {
     switch (kind) {
       case PromptKind.introSentence:
         return 'Say This Sentence';
       case PromptKind.word:
         return 'Say This Word';
       case PromptKind.shortSentence:
-        return 'Say This Short Sentence';
+        return null; // ✅ remove "Say This Short Sentence"
     }
   }
 
@@ -382,17 +413,19 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                   ),
                 ),
 
-                // Half-donut placeholder (fixed height so layout doesn't jump)
+                // Visual area: wave during recording, donut after
                 const SizedBox(height: 8),
                 SizedBox(
                   height: _donutHeight,
-                  child: lastAssessment == null
-                      ? const SizedBox.shrink()
-                      : HalfDonutGauge(
-                          percent: lastAssessment!.accuracyPercent,
-                          size: _donutSize,
-                          thickness: 40,
-                        ),
+                  child: isListening
+                      ? const VoiceWave() // animated wave (web reacts to mic)
+                      : (lastAssessment == null
+                          ? const SizedBox.shrink()
+                          : HalfDonutGauge(
+                              percent: lastAssessment!.accuracyPercent,
+                              size: _donutSize,
+                              thickness: 40,
+                            )),
                 ),
 
                 // Encouragement ONLY after each pair
