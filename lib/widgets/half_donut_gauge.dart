@@ -9,8 +9,8 @@ class HalfDonutGauge extends StatelessWidget {
   const HalfDonutGauge({
     super.key,
     required this.percent,
-    this.size = 260,
-    this.thickness = 24,
+    this.size = 280,
+    this.thickness = 36, // ✅ thicker by default
   });
 
   @override
