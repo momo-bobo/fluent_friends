@@ -20,10 +20,10 @@ class AppTheme {
         ),
       ),
     ),
-    cardTheme: CardTheme(
+    cardTheme: const CardThemeData(
       elevation: 6,
-      margin: const EdgeInsets.all(16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      margin: EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(18))),
       surfaceTintColor: Colors.white,
     ),
   );
