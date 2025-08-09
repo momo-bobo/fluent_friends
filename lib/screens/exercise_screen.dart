@@ -4,11 +4,12 @@ import '../widgets/score_indicator.dart';
 import '../widgets/encouragement_text.dart';
 import '../widgets/centered_page.dart';
 import '../services/speech_service.dart';
+import '../services/tts_service.dart';
 import '../utils/assessment.dart';
 import 'progress_screen.dart';
 
 class ExerciseScreen extends StatefulWidget {
-  final String sound;
+  final String sound; // 'R', 'S', 'Sh'
   const ExerciseScreen({super.key, required this.sound});
 
   @override
@@ -17,7 +18,9 @@ class ExerciseScreen extends StatefulWidget {
 
 class _ExerciseScreenState extends State<ExerciseScreen> {
   final SpeechService _speechService = SpeechService();
+  final TtsService _tts = TtsService();
 
+  // Practice prompts per sound. Tweak/add as needed.
   final Map<String, List<String>> _prompts = {
     'R': ['rabbit', 'river', 'rocket', 'red rock', 'run rapidly', 'round ring'],
     'S': ['sun', 'sand', 'seven snakes', 'see the sea', 'sweet soup', 'silly socks'],
@@ -35,11 +38,20 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   @override
   void initState() {
     super.initState();
-    final list = _prompts[widget.sound] ?? ['Practice makes perfect!'];
+
+    // Initialize first prompt for this sound
+    final list = _prompts[widget.sound] ?? const ['Practice makes perfect!'];
     _currentPrompt = list.first;
 
+    // Init TTS
+    _tts.init();
+
+    // Init speech recognition and score each attempt
     _speechService.init(onResult: (text) {
-      final result = assessRecording(promptedSentence: _currentPrompt, recognizedText: text);
+      final result = assessRecording(
+        promptedSentence: _currentPrompt,
+        recognizedText: text,
+      );
       setState(() {
         _spokenText = text;
         _assessment = result;
@@ -49,10 +61,14 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
       });
 
       if (attempt >= 3) {
+        // Let them see the last feedback briefly, then go to progress
         Future.delayed(const Duration(milliseconds: 800), () {
+          if (!mounted) return;
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => ProgressScreen(scores: scores, sound: widget.sound)),
+            MaterialPageRoute(
+              builder: (_) => ProgressScreen(scores: scores, sound: widget.sound),
+            ),
           );
         });
       }
@@ -75,7 +91,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
 
   void _newPrompt() {
     if (_isListening) return;
-    final list = List<String>.from(_prompts[widget.sound] ?? ['Practice makes perfect!'])..shuffle();
+    final list = List<String>.from(_prompts[widget.sound] ?? const ['Practice makes perfect!'])..shuffle();
     setState(() {
       _currentPrompt = list.first;
       _spokenText = '';
@@ -99,9 +115,25 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
             style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
-          TextButton(onPressed: _newPrompt, child: const Text('New word/phrase')),
-          const SizedBox(height: 12),
 
+          // 🔊 Hear it + New prompt row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                tooltip: 'Hear it',
+                onPressed: () => _tts.speak(_currentPrompt),
+                icon: const Icon(Icons.volume_up),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _newPrompt,
+                child: const Text('New word/phrase'),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
           AnimatedDiagram(sound: widget.sound),
           const SizedBox(height: 12),
 
