@@ -78,10 +78,13 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   int cyclesCompleted = 0;
   final int maxCycles = 2;
 
-  // ✅ Layout constants so nothing jumps
-  static const double _donutSize = 150; // 50% smaller
-  static const double _donutHeight = _donutSize / 2; // gauge is a half circle
-  static const double _transcriptHeight = 56; // fixed height placeholder
+  // Layout constants so nothing jumps
+  static const double _donutSize = 150; // smaller
+  static const double _donutHeight = _donutSize / 2; // half circle
+  static const double _transcriptHeight = 56; // fixed-height placeholder
+
+  // 🔊 Autoplay TTS setting (sticky)
+  bool _autoplayTts = true;
 
   @override
   void initState() {
@@ -126,12 +129,11 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       kind == PromptKind.shortSentence && lastAssessment != null;
 
   bool get _hasNextStep {
-    // There is a "next" unless we have completed maxCycles AND we're at the end of a pair
     if (_justFinishedPair && cyclesCompleted >= maxCycles) return false;
     return true;
   }
 
-  void _goNext() {
+  Future<void> _goNext() async {
     // Decide next prompt based on last assessment (weakest sound)
     if (lastAssessment != null) {
       targetSound = lastAssessment!.targetSound;
@@ -139,14 +141,12 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
     switch (kind) {
       case PromptKind.introSentence:
-        // Move to word for the chosen weak sound
         kind = PromptKind.word;
         lastWord = _pickRandom(wordsBySound[targetSound] ?? ['practice']);
         prompt = lastWord;
         break;
 
       case PromptKind.word:
-        // Use a short sentence template that includes the word
         kind = PromptKind.shortSentence;
         final tplList = shortSentenceTpl[targetSound] ?? ['Say \$WORD clearly.'];
         final tpl = _pickRandom(tplList);
@@ -154,12 +154,11 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         break;
 
       case PromptKind.shortSentence:
-        // Finished a pair
         cyclesCompleted += 1;
 
         if (cyclesCompleted >= maxCycles) {
-          // End of planned session. Do NOT auto-navigate. "Done" (X) will end session.
-          setState(() {});
+          // End of planned session. "Done" (X) will end session.
+          setState(() {}); // keep results on screen
           return;
         }
 
@@ -170,10 +169,23 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         break;
     }
 
+    // Reset UI for next prompt
     setState(() {
       heard = '';
       lastAssessment = null;
+      isListening = false; // flip to true after (maybe) speaking
     });
+
+    // 🔊 Autoplay: speak first, then auto-start practice
+    if (_autoplayTts) {
+      _speakPrompt();
+      await Future.delayed(const Duration(milliseconds: 900));
+    }
+
+    setState(() {
+      isListening = true;
+    });
+    _speech.start();
   }
 
   void _goDone() {
@@ -201,11 +213,60 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     return copy.first;
   }
 
+  Widget _autoplayToggle() {
+    // Two outlined buttons: On / Off
+    final onSelected = _autoplayTts;
+    final offSelected = !_autoplayTts;
+
+    OutlinedButton _btn({
+      required bool selected,
+      required IconData icon,
+      required String label,
+      required VoidCallback onPressed,
+    }) {
+      return OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: selected ? Colors.black : Colors.black45),
+        label: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.black : Colors.black45,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          side: BorderSide(color: Colors.black, width: selected ? 3 : 2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _btn(
+          selected: onSelected,
+          icon: Icons.volume_up_outlined,
+          label: 'Speaker On',
+          onPressed: () => setState(() => _autoplayTts = true),
+        ),
+        const SizedBox(width: 8),
+        _btn(
+          selected: offSelected,
+          icon: Icons.volume_off_outlined,
+          label: 'Speaker Off',
+          onPressed: () => setState(() => _autoplayTts = false),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // ✅ Top-left Home, top-right Done(X). Next stays in bottom row.
+      // Top-left Home, top-right Done (X)
       appBar: HomeAppBar(
         title: _title(),
         actions: [
@@ -231,12 +292,10 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                   style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                IconButton(
-                  tooltip: 'Hear it',
-                  onPressed: _speakPrompt,
-                  icon: const Icon(Icons.volume_up_outlined),
-                ),
+
+                const SizedBox(height: 10),
+                // 🔊 Autoplay toggle (speaker on/off)
+                _autoplayToggle(),
 
                 // Transcript placeholder (no label, fixed height)
                 const SizedBox(height: 16),
@@ -296,9 +355,9 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                         isListening ? Icons.stop_outlined : Icons.play_arrow_outlined,
                         color: Colors.black,
                       ),
-                      label: Text(
-                        isListening ? 'Stop' : 'Practice',
-                        style: const TextStyle(
+                      label: const Text(
+                        'Practice',
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.black,
                           fontSize: 20,
@@ -318,7 +377,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                     ),
                     const SizedBox(width: 16),
 
-                    // Next (always present here; disabled until we have a result)
+                    // Next (disabled until we have a result)
                     ElevatedButton.icon(
                       onPressed: lastAssessment == null ? null : _goNext,
                       icon: Icon(
