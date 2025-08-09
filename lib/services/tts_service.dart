@@ -1,3 +1,3 @@
-export 'tones_service_stub.dart'
-  if (dart.library.html) 'tones_service_web.dart'
-  if (dart.library.io) 'tones_service_mobile.dart';
+export 'tts_service_stub.dart'
+  if (dart.library.html) 'tts_service_web.dart'
+  if (dart.library.io) 'tts_service_mobile.dart';
