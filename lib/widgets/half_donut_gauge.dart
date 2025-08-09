@@ -1,109 +1,60 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
 class HalfDonutGauge extends StatelessWidget {
-  final double percent; // 0..100
-  final double size;    // overall size in px
+  final double percent; // 0–100
+  final double size;
   final double thickness;
 
   const HalfDonutGauge({
     super.key,
     required this.percent,
-    this.size = 280,
-    this.thickness = 36, // ✅ thicker by default
+    required this.size,
+    this.thickness = 20,
   });
 
   @override
   Widget build(BuildContext context) {
-    final clamped = percent.clamp(0, 100);
-    return SizedBox(
-      width: size,
-      height: size / 2 + thickness / 2,
-      child: CustomPaint(
-        painter: _HalfDonutPainter(
-          percent: clamped.toDouble(),
-          thickness: thickness,
-          bgColor: Colors.black12,
-          fillColor: Colors.green,
-        ),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: thickness / 2),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${clamped.toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    return CustomPaint(
+      size: Size(size, size / 2),
+      painter: _HalfDonutPainter(
+        percent: percent,
+        thickness: thickness,
       ),
     );
   }
 }
 
 class _HalfDonutPainter extends CustomPainter {
-  final double percent; // 0..100
+  final double percent;
   final double thickness;
-  final Color bgColor;
-  final Color fillColor;
 
-  _HalfDonutPainter({
-    required this.percent,
-    required this.thickness,
-    required this.bgColor,
-    required this.fillColor,
-  });
+  _HalfDonutPainter({required this.percent, required this.thickness});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final width = size.width;
-    final radius = width / 2;
-    final rect = Rect.fromCircle(center: Offset(radius, radius), radius: radius - thickness / 2);
-
-    final start = math.pi; // left (180°)
-    final sweepFull = math.pi; // 180° total for half donut
-    final sweepValue = sweepFull * (percent / 100.0);
-
-    final bgPaint = Paint()
-      ..style = PaintingStyle.stroke
+    final Paint basePaint = Paint()
+      ..color = Colors.grey[300]!
       ..strokeWidth = thickness
-      ..strokeCap = StrokeCap.round
-      ..color = bgColor;
-
-    final fgPaint = Paint()
       ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final Paint progressPaint = Paint()
+      ..color = Colors.green
       ..strokeWidth = thickness
-      ..strokeCap = StrokeCap.round
-      ..color = fillColor;
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
-    // Background arc (full half ring)
-    canvas.drawArc(rect, start, sweepFull, false, bgPaint);
+    final Rect rect = Rect.fromLTWH(0, 0, size.width, size.height * 2);
 
-    // Foreground arc (progress)
-    if (percent > 0) {
-      canvas.drawArc(rect, start, sweepValue, false, fgPaint);
+    // background arc
+    canvas.drawArc(rect, math.pi, math.pi, false, basePaint);
 
-      // Indicator dot at the end of the fill arc
-      final endAngle = start + sweepValue;
-      final cx = rect.center.dx + (rect.width / 2) * math.cos(endAngle);
-      final cy = rect.center.dy + (rect.height / 2) * math.sin(endAngle);
-      final dotPaint = Paint()..color = fillColor;
-      canvas.drawCircle(Offset(cx, cy), thickness * 0.3, dotPaint);
-    }
+    // progress arc
+    final sweepAngle = math.pi * (percent / 100.0);
+    canvas.drawArc(rect, math.pi, sweepAngle, false, progressPaint);
   }
 
   @override
-  bool shouldRepaint(covariant _HalfDonutPainter oldDelegate) {
-    return oldDelegate.percent != percent ||
-        oldDelegate.thickness != thickness ||
-        oldDelegate.bgColor != bgColor ||
-        oldDelegate.fillColor != fillColor;
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
