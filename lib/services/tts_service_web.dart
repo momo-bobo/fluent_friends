@@ -3,14 +3,31 @@ import '../web_tts_bridge.dart';
 
 class TtsService {
   Future<void> init() async {
-    // no-op for web
+    // no-op
   }
 
   Future<void> speak(String text) async {
-    js.context.callMethod('speakText', [text]);
+    speakText(text);
   }
 
   Future<void> stop() async {
-    js.context.callMethod('stopSpeaking', []);
+    stopSpeaking();
+  }
+
+  Future<List<String>> listVoices() async {
+    try {
+      final arr = getVoiceNames();
+      return arr.map((e) => e.toString()).toList();
+    } catch (_) {
+      return <String>[];
+    }
+  }
+
+  Future<bool> setPreferredVoice(String name) async {
+    try {
+      return setPreferredVoiceByName(name);
+    } catch (_) {
+      return false;
+    }
   }
 }
