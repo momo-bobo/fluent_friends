@@ -10,10 +10,23 @@ import '../services/tones_service.dart';
 import 'session_complete_screen.dart';
 import '../content/content_repository.dart';
 
+// NEW: optional flow mode to support assessment sequences
+enum PracticeFlowMode { standard, assessment }
+
 enum PromptKind { introSentence, word, shortSentence }
 
 class PracticeFlowScreen extends StatefulWidget {
-  const PracticeFlowScreen({super.key});
+  // NEW: optional sequence (e.g., assessment story sentences)
+  final List<String>? items;
+  final PracticeFlowMode mode;
+  final VoidCallback? onSessionComplete;
+
+  const PracticeFlowScreen({
+    super.key,
+    this.items,
+    this.mode = PracticeFlowMode.standard,
+    this.onSessionComplete,
+  });
 
   @override
   State<PracticeFlowScreen> createState() => _PracticeFlowScreenState();
@@ -27,8 +40,11 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   late ContentRepository _content;
   bool _loading = true;
 
+  // For standard mode (existing behavior)
   PromptKind kind = PromptKind.introSentence;
   String targetSound = 'R';
+
+  // Shared UI state
   String prompt = '';
   String lastWord = '';
   bool isListening = false;
@@ -49,6 +65,11 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   // Mic level (currently not driving the painter; kept for future)
   double _micLevel = 0.0;
 
+  // NEW: sequence index for assessment mode
+  int _seqIndex = 0;
+
+  bool get _isAssessment => widget.mode == PracticeFlowMode.assessment && (widget.items?.isNotEmpty ?? false);
+
   @override
   void initState() {
     super.initState();
@@ -60,7 +81,17 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     await _tones.init();
     _speech.init(onResult: _onHeard);
 
-    // Load content JSON
+    if (_isAssessment) {
+      // Assessment mode: no dependency on ContentRepository for items
+      prompt = widget.items![_seqIndex];
+      setState(() {
+        _loading = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _kickoffIfNeeded());
+      return;
+    }
+
+    // Standard mode: load sounds content and proceed as before
     _content = await ContentRepository.loadFromAssets();
 
     // Choose starting sound/prompt from content
@@ -138,6 +169,38 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       kind == PromptKind.shortSentence && lastAssessment != null;
 
   Future<void> _goNext() async {
+    if (_isAssessment) {
+      // Assessment mode: advance through provided items
+      final isLast = _seqIndex >= (widget.items!.length - 1);
+      if (isLast) {
+        // session complete
+        widget.onSessionComplete?.call();
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SessionCompleteScreen(scores: sessionScores),
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _seqIndex += 1;
+        prompt = widget.items![_seqIndex];
+        heard = '';
+        lastAssessment = null;
+      });
+
+      if (_autoplayTts) {
+        await _tts.stop();
+        await _tts.speakAndWait(prompt);
+      }
+      await _startListening();
+      return;
+    }
+
+    // -------- Standard mode (existing flow) --------
     // Choose next step informed by last assessment (weakest sound), fallback safe
     if (lastAssessment != null) {
       final suggested = lastAssessment!.targetSound;
@@ -192,6 +255,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   }
 
   String? _title() {
+    if (_isAssessment) return 'Say This Sentence';
     switch (kind) {
       case PromptKind.introSentence:
         return 'Say This Sentence';
@@ -378,7 +442,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                             )),
                 ),
 
-                if (_justFinishedPair && lastAssessment != null) ...[
+                if (_justFinishedPair && lastAssessment != null && !_isAssessment) ...[
                   const SizedBox(height: 10),
                   Text(
                     _encouragement(lastAssessment!.accuracyPercent),
@@ -457,7 +521,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   String _encouragement(double avg) {
     if (avg < 25) return "Good start!";
     if (avg < 50) return "Keep going!";
-    if (avg < 75) return "Nice progress!";
+    if (avg < 75) return "Nice!";
     if (avg < 90) return "Great job!";
     return "Fantastic!";
   }
