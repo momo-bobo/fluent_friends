@@ -3,7 +3,7 @@ import 'dart:convert';
 /// Represents the type of content in the JSON files.
 enum ContentType { assessmentStory, sentenceSet, wordSet }
 
-/// Helper to map the `type` string in JSON to our ContentType enum.
+/// Helper to map the `type` string in JSON to our ContentType enum. 
 ContentType _typeFromString(String s) {
   switch (s) {
     case 'assessment_story':
