@@ -1,8 +1,9 @@
+import 'package:flutter/foundation.dart'; // for debugPrint
 import '../content/content_bank_repository.dart';
 import '../content/models.dart';
 
-/// Session-only gate: runs the assessment story at most once per app run.
-/// No persistent storage or external dependencies, so it's CI-safe.
+/// Simple session-only gate: runs the assessment once per app session.
+/// No persistent storage to keep CI simple.
 class AssessmentGateResult {
   final bool shouldRunAssessment;
   final AssessmentStory? story;
@@ -14,25 +15,30 @@ class AssessmentGate {
 
   static Future<AssessmentGateResult> decide({String locale = 'en'}) async {
     if (_ranThisSession) {
+      debugPrint('[AssessmentGate] Already ran this session; skipping.');
       return AssessmentGateResult(false, null);
     }
 
-    final story = await ContentBankRepository.instance.getFirstAssessment(locale: locale);
+    debugPrint('[AssessmentGate] Deciding …');
+    final story =
+        await ContentBankRepository.instance.getFirstAssessment(locale: locale);
 
     if (story == null || story.sentences.isEmpty) {
-      // No assessment content available; skip gracefully.
+      debugPrint('[AssessmentGate] No story available; using standard flow.');
       return AssessmentGateResult(false, null);
     }
 
+    debugPrint('[AssessmentGate] Story found; will run assessment.');
     return AssessmentGateResult(true, story);
   }
 
   static void markDoneNow() {
     _ranThisSession = true;
+    debugPrint('[AssessmentGate] Marked as done for this session.');
   }
 
-  /// For testing or debugging you can reset the gate.
   static void resetForDebug() {
     _ranThisSession = false;
+    debugPrint('[AssessmentGate] Reset for debug.');
   }
 }
