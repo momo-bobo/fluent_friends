@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "locales": ["en"],
+  "sets": {
+    "assessment": [
+      { "id": "assessment_story_1", "path": "assets/content/assessment/assessment_story_1.json", "locale": "en" }
+    ],
+    "sentences": [
+      { "id": "general_sentences_en", "path": "assets/content/sentences/general_sentences_en.json", "locale": "en" }
+    ],
+    "words": [
+      { "id": "general_words_en", "path": "assets/content/words/general_words_en.json", "locale": "en" }
+    ]
+  }
+}
