@@ -55,9 +55,9 @@ class ContentIndex {
 /// Points to a specific content file.
 class ContentPointer {
   final String id;
-  final String? path;
   final String locale;
-  final Map<String, dynamic>? inline; // NEW: optional inline payload
+  final String? path; // optional when using inline
+  final Map<String, dynamic>? inline; // optional inline payload
 
   ContentPointer({
     required this.id,
@@ -66,22 +66,16 @@ class ContentPointer {
     this.inline,
   });
 
-  factory ContentPointer.fromJson(Map<String, dynamic> json) => ContentPointer(
-        id: json['id'] as String,
-        path: json['path'] as String?, // may be null if inline is used
-        locale: json['locale'] as String? ?? 'en',
-        inline: json['inline'] == null
-            ? null
-            : Map<String, dynamic>.from(json['inline'] as Map),
-      );
-}
-
-  factory ContentPointer.fromJson(Map<String, dynamic> json) =>
-      ContentPointer(
-        id: json['id'] as String,
-        path: json['path'] as String,
-        locale: json['locale'] as String? ?? 'en',
-      );
+  factory ContentPointer.fromJson(Map<String, dynamic> json) {
+    return ContentPointer(
+      id: json['id'] as String,
+      locale: (json['locale'] as String?) ?? 'en',
+      path: json['path'] as String?, // may be null if inline used
+      inline: json['inline'] == null
+          ? null
+          : Map<String, dynamic>.from(json['inline'] as Map),
+    );
+  }
 }
 
 /// Base interface for all content items.
