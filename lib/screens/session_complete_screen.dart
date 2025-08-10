@@ -25,7 +25,7 @@ class SessionCompleteScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              HalfDonutGauge(percent: avg, size: 300, thickness: 40),
+              HalfDonutGauge(percent: avg, size: 300, thickness: 80),
               const SizedBox(height: 20),
               const Text(
                 'Good job today!\nSee you next time.',
