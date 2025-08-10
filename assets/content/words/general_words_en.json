@@ -1,0 +1,9 @@
+{
+  "id": "general_words_en",
+  "type": "word_set",
+  "locale": "en",
+  "items": [
+    { "text": "cat", "targetSounds": ["k", "t"] },
+    { "text": "frog", "targetSounds": ["fr", "g"] }
+  ]
+}
