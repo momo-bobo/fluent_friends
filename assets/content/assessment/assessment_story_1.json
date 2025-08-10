@@ -1,0 +1,14 @@
+{
+  "id": "assessment_story_1",
+  "type": "assessment_story",
+  "title": "The Silly Sandwich Adventure",
+  "locale": "en",
+  "sentences": [
+    "Peter the puppy liked to play in the park.",
+    "One sunny day, he spotted a sandwich on a swing.",
+    "He tried to take a tiny bite, but it bounced away!",
+    "Peter laughed, then ran to find his funny lunch."
+  ],
+  "targetSounds": ["p","b","t","d","k","g","s","z","f","v","l","r","w","y","st","sp","tr","pl"],
+  "meta": { "ageRange": "5-10", "tags": ["funny", "intro", "broad-sampling"] }
+}
