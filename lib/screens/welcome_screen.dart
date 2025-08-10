@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'practice_flow_screen.dart';
+import '../session/assessment_gate.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -41,11 +42,34 @@ class WelcomeScreen extends StatelessWidget {
                 ),
                 elevation: 0,
               ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PracticeFlowScreen()),
-                );
+              onPressed: () async {
+                final gate = await AssessmentGate.decide();
+
+                if (!context.mounted) return;
+
+                if (gate.shouldRunAssessment &&
+                    gate.story != null &&
+                    gate.story!.sentences.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PracticeFlowScreen(
+                        items: gate.story!.sentences,
+                        mode: PracticeFlowMode.assessment,
+                        onSessionComplete: () {
+                          AssessmentGate.markDoneNow();
+                        },
+                      ),
+                    ),
+                  );
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PracticeFlowScreen(),
+                    ),
+                  );
+                }
               },
             ),
           ],
