@@ -22,8 +22,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/content.json
-    - assets/content/index.json
-    - assets/content/assessment/assessment_story_1.json
-    - assets/content/sentences/general_sentences_en.json
-    - assets/content/words/general_words_en.json
+    flutter:
+  assets:
+    - assets/content/
+
