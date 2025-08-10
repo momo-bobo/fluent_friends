@@ -8,6 +8,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  shared_preferences: ^2.2.3
   speech_to_text: ^7.2.0
   js: ^0.6.7
   fl_chart: ^0.63.0
@@ -22,3 +23,7 @@ flutter:
 
   assets:
     - assets/content.json
+    - assets/content/index.json
+    - assets/content/assessment/assessment_story_1.json
+    - assets/content/sentences/general_sentences_en.json
+    - assets/content/words/general_words_en.json
