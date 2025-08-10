@@ -1,9 +1,9 @@
-import 'package:flutter/foundation.dart'; // for debugPrint
+import 'package:flutter/foundation.dart'; // debugPrint
 import 'package:flutter/services.dart' show rootBundle;
 import 'models.dart';
 
-/// Loads the new JSON content bank under assets/content/ using index.json.
-/// Separate from your existing ContentRepository (sounds).
+/// Loads the JSON content bank under assets/content/ using index.json.
+/// Separate from your legacy sounds ContentRepository.
 class ContentBankRepository {
   ContentBankRepository._();
   static final ContentBankRepository instance = ContentBankRepository._();
@@ -45,7 +45,9 @@ class ContentBankRepository {
     }
   }
 
-  /// Convenience: first assessment story for a locale (default 'en').
+  /// First assessment story for a locale.
+  /// Prefers inline data (index.json) to avoid asset bundling issues,
+  /// then falls back to the asset path if provided.
   Future<AssessmentStory?> getFirstAssessment({String locale = 'en'}) async {
     final index = await loadIndex();
     if (index == null || index.assessment.isEmpty) {
@@ -58,7 +60,7 @@ class ContentBankRepository {
       orElse: () => index.assessment.first,
     );
 
-    // First, try inline if present
+    // Inline first
     if (pointer.inline != null) {
       try {
         final item = AssessmentStory.fromJson(pointer.inline!);
@@ -70,7 +72,7 @@ class ContentBankRepository {
       }
     }
 
-    // Otherwise, load from asset path as before
+    // Fallback to asset path
     if (pointer.path == null) {
       debugPrint('[ContentBank] No path for assessment and no inline data.');
       return null;
@@ -92,7 +94,27 @@ class ContentBankRepository {
 
     try {
       final pointer = index.sentences.firstWhere((p) => p.id == id);
-      final item = await loadItemByPath(pointer.path);
+
+      // Optional inline support
+      if (pointer.inline != null) {
+        try {
+          final map = pointer.inline!;
+          if ((map['type'] as String?) == 'sentence_set') {
+            final item = SentenceSet.fromJson(map);
+            debugPrint('[ContentBank] Loaded sentence set from inline (${item.id}).');
+            return item;
+          }
+        } catch (e) {
+          debugPrint('[ContentBank] Failed to parse inline sentence set: $e');
+        }
+      }
+
+      if (pointer.path == null) {
+        debugPrint('[ContentBank] SentenceSet has no path and no inline: $id');
+        return null;
+      }
+
+      final item = await loadItemByPath(pointer.path!);
       return item is SentenceSet ? item : null;
     } catch (e) {
       debugPrint('[ContentBank] SentenceSet not found: $id ($e)');
@@ -106,7 +128,27 @@ class ContentBankRepository {
 
     try {
       final pointer = index.words.firstWhere((p) => p.id == id);
-      final item = await loadItemByPath(pointer.path);
+
+      // Optional inline support
+      if (pointer.inline != null) {
+        try {
+          final map = pointer.inline!;
+          if ((map['type'] as String?) == 'word_set') {
+            final item = WordSet.fromJson(map);
+            debugPrint('[ContentBank] Loaded word set from inline (${item.id}).');
+            return item;
+          }
+        } catch (e) {
+          debugPrint('[ContentBank] Failed to parse inline word set: $e');
+        }
+      }
+
+      if (pointer.path == null) {
+        debugPrint('[ContentBank] WordSet has no path and no inline: $id');
+        return null;
+      }
+
+      final item = await loadItemByPath(pointer.path!);
       return item is WordSet ? item : null;
     } catch (e) {
       debugPrint('[ContentBank] WordSet not found: $id ($e)');
@@ -114,7 +156,7 @@ class ContentBankRepository {
     }
   }
 
-  /// Clears caches (useful in hot reload debugging).
+  /// Clears caches (useful during hot reload debugging).
   void resetCachesForDebug() {
     _indexCache = null;
     _itemCache.clear();
