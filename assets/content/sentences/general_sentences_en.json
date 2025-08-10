@@ -1,0 +1,9 @@
+{
+  "id": "general_sentences_en",
+  "type": "sentence_set",
+  "locale": "en",
+  "items": [
+    { "text": "Sam sees six silver spoons.", "targetSounds": ["s", "z"] },
+    { "text": "Lily likes little lemons.", "targetSounds": ["l"] }
+  ]
+}
