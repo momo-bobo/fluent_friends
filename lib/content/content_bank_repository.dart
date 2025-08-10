@@ -53,14 +53,31 @@ class ContentBankRepository {
       return null;
     }
 
-    // Prefer exact locale match; otherwise first.
     final pointer = index.assessment.firstWhere(
       (p) => p.locale == locale,
       orElse: () => index.assessment.first,
     );
-    debugPrint('[ContentBank] Using assessment: id=${pointer.id} path=${pointer.path}');
 
-    final item = await loadItemByPath(pointer.path);
+    // First, try inline if present
+    if (pointer.inline != null) {
+      try {
+        final item = AssessmentStory.fromJson(pointer.inline!);
+        debugPrint('[ContentBank] Loaded assessment from inline with ${item.sentences.length} sentences.');
+        return item;
+      } catch (e) {
+        debugPrint('[ContentBank] Failed to parse inline assessment: $e');
+        // fall through to path
+      }
+    }
+
+    // Otherwise, load from asset path as before
+    if (pointer.path == null) {
+      debugPrint('[ContentBank] No path for assessment and no inline data.');
+      return null;
+    }
+
+    debugPrint('[ContentBank] Using assessment: id=${pointer.id} path=${pointer.path}');
+    final item = await loadItemByPath(pointer.path!);
     if (item is! AssessmentStory) {
       debugPrint('[ContentBank] Loaded item is not an AssessmentStory.');
       return null;
