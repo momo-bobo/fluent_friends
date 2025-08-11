@@ -31,8 +31,8 @@ class PracticeFlowScreen extends StatefulWidget {
   /// If provided, seeds the first sound in standard mode.
   final String? initialTargetSound;
 
-  /// Ends a focused block after N completed exercises
-  /// (where an exercise = finishing a short-sentence step).
+  /// Ends a focused block after N total steps (every Next increments),
+  /// e.g., 6 = 3 word+sentence pairs.
   final int? exercisesTarget;
 
   const PracticeFlowScreen({
@@ -70,7 +70,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
   final List<int> sessionScores = [];
   int cyclesCompleted = 0;
-  final int maxCycles = 2; // ignored when exercisesTarget != null
+  final int maxCycles = 2; // ignored when focused block is active
 
   static const double _donutSize = 150;
   static const double _donutHeight = _donutSize / 2;
@@ -93,8 +93,8 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   final List<int> _assessmentScores = [];
 
   // Focused block counting (ends after exercisesTarget if set)
-  int _exercisesCompleted = 0;
-
+  // Counts EVERY Next (word or sentence).
+  int _stepsCompleted = 0;
   bool get _isFocusedBlock => !_isAssessment && (widget.exercisesTarget != null);
 
   @override
@@ -121,11 +121,17 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
     // Seed from assessment if provided, else random
     targetSound = widget.initialTargetSound ?? _content.randomSoundKey();
-    prompt = _content.randomIntroSentence(targetSound);
 
-    // In focused blocks, ignore legacy pair-limit gating
+    // In focused blocks, START AT A WORD and skip intro sentence
     if (_isFocusedBlock) {
-      cyclesCompleted = 0; // not used in this mode
+      kind = PromptKind.word;
+      lastWord = _content.randomWord(targetSound);
+      prompt = lastWord;
+      cyclesCompleted = 0; // legacy gating not used here
+      _stepsCompleted = 0; // ensure fresh counter
+    } else {
+      // Legacy: start with intro sentence
+      prompt = _content.randomIntroSentence(targetSound);
     }
 
     setState(() => _loading = false);
@@ -203,10 +209,10 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       kind == PromptKind.shortSentence && lastAssessment != null;
 
   int? _displayExerciseNumber() {
-    if (!_isFocusedBlock) return null;
+    if (!_isFocusedBlock || widget.exercisesTarget == null) return null;
     final total = widget.exercisesTarget!;
-    // Show "next" exercise number (1-based), clamped
-    final next = (_exercisesCompleted + 1);
+    // Show next step number (1-based), clamped
+    final next = (_stepsCompleted + 1);
     return next > total ? total : next;
   }
 
@@ -253,7 +259,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       return;
     }
 
-    // -------- Standard mode (existing flow, with focused-block fix) --------
+    // -------- Standard mode (existing flow, with focused-block step counting) --------
 
     // If we have a result, steer toward suggested target sound (if supported)
     if (lastAssessment != null) {
@@ -263,8 +269,20 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       }
     }
 
+    // In focused blocks, COUNT EVERY NEXT and cap at exercisesTarget
+    if (_isFocusedBlock && widget.exercisesTarget != null) {
+      _stepsCompleted += 1;
+      if (_stepsCompleted >= widget.exercisesTarget!) {
+        widget.onSessionComplete?.call();
+        if (!mounted) return;
+        Navigator.pop(context); // back to results screen
+        return;
+      }
+    }
+
     switch (kind) {
       case PromptKind.introSentence:
+        // (Focused blocks don't use introSentence; this is legacy path.)
         kind = PromptKind.word;
         lastWord = _content.randomWord(targetSound);
         prompt = lastWord;
@@ -276,19 +294,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         break;
 
       case PromptKind.shortSentence:
-        // Count a completed exercise FIRST (pair finished)
-        _exercisesCompleted += 1;
-
-        // If we're in a focused block, end immediately when target reached
-        if (_isFocusedBlock &&
-            widget.exercisesTarget != null &&
-            _exercisesCompleted >= widget.exercisesTarget!) {
-          widget.onSessionComplete?.call();
-          if (!mounted) return;
-          Navigator.pop(context); // return to results screen
-          return;
-        }
-
         // Legacy pair gating only applies when NOT in focused mode
         if (!_isFocusedBlock) {
           cyclesCompleted += 1;
@@ -297,8 +302,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
             return;
           }
         }
-
-        // Continue to next word in the same target sound
+        // Continue to next word in same target sound
         kind = PromptKind.word;
         lastWord = _content.randomWord(targetSound);
         prompt = lastWord;
@@ -612,7 +616,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   String _encouragement(double avg) {
     if (avg < 25) return "Good start!";
     if (avg < 50) return "Keep going!";
-    if (avg < 75) return "Nice!";
+    if (avg < 75) return "Nice progress!";
     if (avg < 90) return "Great job!";
     return "Fantastic!";
   }
