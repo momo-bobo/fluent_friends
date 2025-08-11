@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+
 import '../widgets/home_app_bar.dart';
 import '../widgets/half_donut_gauge.dart';
 import '../widgets/voice_wave.dart';
@@ -9,23 +10,39 @@ import '../services/tts_service.dart';
 import '../services/tones_service.dart';
 import 'session_complete_screen.dart';
 import '../content/content_repository.dart';
+import '../models/assessment_outcome.dart';
 
-// NEW: optional flow mode to support assessment sequences
 enum PracticeFlowMode { standard, assessment }
-
 enum PromptKind { introSentence, word, shortSentence }
 
 class PracticeFlowScreen extends StatefulWidget {
-  // NEW: optional sequence (e.g., assessment story sentences)
+  /// When in [PracticeFlowMode.assessment], the sentences to run in order.
   final List<String>? items;
+
+  /// Standard (legacy) or assessment.
   final PracticeFlowMode mode;
+
+  /// Called when a session completes (legacy hook).
   final VoidCallback? onSessionComplete;
+
+  /// Called when an assessment sequence ends (preferred).
+  final ValueChanged<AssessmentOutcome>? onAssessmentComplete;
+
+  /// If provided, seeds the first sound in standard mode.
+  final String? initialTargetSound;
+
+  /// If provided, ends a focused block after N completed exercises
+  /// (where an exercise = finishing a short-sentence step).
+  final int? exercisesTarget;
 
   const PracticeFlowScreen({
     super.key,
     this.items,
     this.mode = PracticeFlowMode.standard,
     this.onSessionComplete,
+    this.onAssessmentComplete,
+    this.initialTargetSound,
+    this.exercisesTarget,
   });
 
   @override
@@ -40,7 +57,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   late ContentRepository _content;
   bool _loading = true;
 
-  // For standard mode (existing behavior)
+  // Standard mode state (existing)
   PromptKind kind = PromptKind.introSentence;
   String targetSound = 'R';
 
@@ -62,13 +79,21 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   bool _autoplayTts = true;
   bool _didKickoff = false;
 
-  // Mic level (currently not driving the painter; kept for future)
+  // Mic level (web)
   double _micLevel = 0.0;
 
-  // NEW: sequence index for assessment mode
+  // Assessment sequencing
   int _seqIndex = 0;
+  bool get _isAssessment =>
+      widget.mode == PracticeFlowMode.assessment &&
+      (widget.items?.isNotEmpty ?? false);
 
-  bool get _isAssessment => widget.mode == PracticeFlowMode.assessment && (widget.items?.isNotEmpty ?? false);
+  // Collect assessment outcomes
+  final List<String> _assessmentSuggestedSounds = [];
+  final List<int> _assessmentScores = [];
+
+  // Focused block counting (ends after exercisesTarget if set)
+  int _exercisesCompleted = 0;
 
   @override
   void initState() {
@@ -82,27 +107,20 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     _speech.init(onResult: _onHeard);
 
     if (_isAssessment) {
-      // Assessment mode: no dependency on ContentRepository for items
+      // No dependency on ContentRepository for assessment text
       prompt = widget.items![_seqIndex];
-      setState(() {
-        _loading = false;
-      });
+      setState(() => _loading = false);
       WidgetsBinding.instance.addPostFrameCallback((_) => _kickoffIfNeeded());
       return;
     }
 
-    // Standard mode: load sounds content and proceed as before
+    // Standard mode: load content.json (legacy sounds system)
     _content = await ContentRepository.loadFromAssets();
-
-    // Choose starting sound/prompt from content
-    targetSound = _content.randomSoundKey();
+    // Seed from assessment if provided, else random
+    targetSound = widget.initialTargetSound ?? _content.randomSoundKey();
     prompt = _content.randomIntroSentence(targetSound);
 
-    setState(() {
-      _loading = false;
-    });
-
-    // Auto-play prompt then auto-start practice on first load
+    setState(() => _loading = false);
     WidgetsBinding.instance.addPostFrameCallback((_) => _kickoffIfNeeded());
   }
 
@@ -147,10 +165,18 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
   void _onHeard(String text) {
     final result = assessRecording(promptedSentence: prompt, recognizedText: text);
+    final scoreInt = result.accuracyPercent.round();
+
     setState(() {
       heard = text;
       lastAssessment = result;
-      sessionScores.add(result.accuracyPercent.round());
+      sessionScores.add(scoreInt);
+      if (_isAssessment) {
+        _assessmentScores.add(scoreInt);
+        if (result.targetSound.isNotEmpty) {
+          _assessmentSuggestedSounds.add(result.targetSound);
+        }
+      }
     });
     _stopListening();
   }
@@ -170,10 +196,21 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
   Future<void> _goNext() async {
     if (_isAssessment) {
-      // Assessment mode: advance through provided items
+      // Advance through provided items
       final isLast = _seqIndex >= (widget.items!.length - 1);
       if (isLast) {
-        // session complete
+        final outcome = AssessmentOutcome(
+          suggestedSounds: List<String>.from(_assessmentSuggestedSounds),
+          perSentenceScores: List<int>.from(_assessmentScores),
+        );
+
+        // Prefer explicit assessment completion hook
+        if (widget.onAssessmentComplete != null) {
+          widget.onAssessmentComplete!(outcome);
+          return;
+        }
+
+        // Fallback: legacy complete behavior
         widget.onSessionComplete?.call();
         if (!mounted) return;
         Navigator.pushReplacement(
@@ -201,7 +238,8 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     }
 
     // -------- Standard mode (existing flow) --------
-    // Choose next step informed by last assessment (weakest sound), fallback safe
+
+    // If we have a result, steer toward the suggested target sound (if supported)
     if (lastAssessment != null) {
       final suggested = lastAssessment!.targetSound;
       if (_content.hasSound(suggested)) {
@@ -223,6 +261,18 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
       case PromptKind.shortSentence:
         cyclesCompleted += 1;
+
+        // Count a completed exercise at the end of the short-sentence step
+        _exercisesCompleted += 1;
+        if (widget.exercisesTarget != null &&
+            _exercisesCompleted >= widget.exercisesTarget!) {
+          // End of a focused block for this sound
+          widget.onSessionComplete?.call();
+          if (!mounted) return;
+          Navigator.pop(context); // return to results screen
+          return;
+        }
+
         if (cyclesCompleted >= maxCycles) {
           setState(() {}); // Planned end; Done (X) finishes session
           return;
@@ -366,7 +416,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         appBar: HomeAppBar(
           title: 'Loading…',
           actions: const [
-            // Disabled while loading
             TextButton(onPressed: null, child: Text('Voice…', style: TextStyle(color: Colors.black54))),
             IconButton(
               tooltip: 'Done',
@@ -381,7 +430,6 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // Top-left Home, top-right Voice… then Done (X)
       appBar: HomeAppBar(
         title: _title(),
         actions: [
@@ -432,7 +480,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                 SizedBox(
                   height: _donutHeight,
                   child: isListening
-                      ? VoiceWave(level: _micLevel)   // ← pass the live level; no const
+                      ? VoiceWave(level: _micLevel)
                       : (lastAssessment == null
                           ? const SizedBox.shrink()
                           : HalfDonutGauge(
@@ -521,7 +569,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   String _encouragement(double avg) {
     if (avg < 25) return "Good start!";
     if (avg < 50) return "Keep going!";
-    if (avg < 75) return "Nice!";
+    if (avg < 75) return "Nice progress!";
     if (avg < 90) return "Great job!";
     return "Fantastic!";
   }
