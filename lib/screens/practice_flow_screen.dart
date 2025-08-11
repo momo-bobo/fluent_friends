@@ -31,7 +31,7 @@ class PracticeFlowScreen extends StatefulWidget {
   /// If provided, seeds the first sound in standard mode.
   final String? initialTargetSound;
 
-  /// If provided, ends a focused block after N completed exercises
+  /// Ends a focused block after N completed exercises
   /// (where an exercise = finishing a short-sentence step).
   final int? exercisesTarget;
 
@@ -70,7 +70,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
   final List<int> sessionScores = [];
   int cyclesCompleted = 0;
-  final int maxCycles = 2;
+  final int maxCycles = 2; // ignored when exercisesTarget != null
 
   static const double _donutSize = 150;
   static const double _donutHeight = _donutSize / 2;
@@ -95,6 +95,8 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   // Focused block counting (ends after exercisesTarget if set)
   int _exercisesCompleted = 0;
 
+  bool get _isFocusedBlock => !_isAssessment && (widget.exercisesTarget != null);
+
   @override
   void initState() {
     super.initState();
@@ -107,18 +109,24 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     _speech.init(onResult: _onHeard);
 
     if (_isAssessment) {
-      // No dependency on ContentRepository for assessment text
+      // Assessment uses provided sentences
       prompt = widget.items![_seqIndex];
       setState(() => _loading = false);
       WidgetsBinding.instance.addPostFrameCallback((_) => _kickoffIfNeeded());
       return;
     }
 
-    // Standard mode: load content.json (legacy sounds system)
+    // Standard mode: load legacy sounds content
     _content = await ContentRepository.loadFromAssets();
+
     // Seed from assessment if provided, else random
     targetSound = widget.initialTargetSound ?? _content.randomSoundKey();
     prompt = _content.randomIntroSentence(targetSound);
+
+    // In focused blocks, ignore legacy pair-limit gating
+    if (_isFocusedBlock) {
+      cyclesCompleted = 0; // not used in this mode
+    }
 
     setState(() => _loading = false);
     WidgetsBinding.instance.addPostFrameCallback((_) => _kickoffIfNeeded());
@@ -194,6 +202,14 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   bool get _justFinishedPair =>
       kind == PromptKind.shortSentence && lastAssessment != null;
 
+  int? _displayExerciseNumber() {
+    if (!_isFocusedBlock) return null;
+    final total = widget.exercisesTarget!;
+    // Show "next" exercise number (1-based), clamped
+    final next = (_exercisesCompleted + 1);
+    return next > total ? total : next;
+  }
+
   Future<void> _goNext() async {
     if (_isAssessment) {
       // Advance through provided items
@@ -237,9 +253,9 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       return;
     }
 
-    // -------- Standard mode (existing flow) --------
+    // -------- Standard mode (existing flow, with focused-block fix) --------
 
-    // If we have a result, steer toward the suggested target sound (if supported)
+    // If we have a result, steer toward suggested target sound (if supported)
     if (lastAssessment != null) {
       final suggested = lastAssessment!.targetSound;
       if (_content.hasSound(suggested)) {
@@ -260,27 +276,29 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         break;
 
       case PromptKind.shortSentence:
-        // Count a completed exercise first
+        // Count a completed exercise FIRST (pair finished)
         _exercisesCompleted += 1;
-      
+
         // If we're in a focused block, end immediately when target reached
-        if (widget.exercisesTarget != null &&
+        if (_isFocusedBlock &&
+            widget.exercisesTarget != null &&
             _exercisesCompleted >= widget.exercisesTarget!) {
           widget.onSessionComplete?.call();
           if (!mounted) return;
-          Navigator.pop(context); // back to results
+          Navigator.pop(context); // return to results screen
           return;
         }
-      
-        // Only use maxCycles for legacy unfocused sessions
-        if (widget.exercisesTarget == null) {
+
+        // Legacy pair gating only applies when NOT in focused mode
+        if (!_isFocusedBlock) {
           cyclesCompleted += 1;
           if (cyclesCompleted >= maxCycles) {
             setState(() {}); // Done (X) finishes session
             return;
           }
         }
-      
+
+        // Continue to next word in the same target sound
         kind = PromptKind.word;
         lastWord = _content.randomWord(targetSound);
         prompt = lastWord;
@@ -432,6 +450,9 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
       );
     }
 
+    final counterNumber = _displayExerciseNumber();
+    final counterTotal = widget.exercisesTarget;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: HomeAppBar(
@@ -455,7 +476,26 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // TOP-RIGHT COUNTER (only in focused blocks)
+                if (_isFocusedBlock && counterNumber != null && counterTotal != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.black, width: 2),
+                      ),
+                      child: Text(
+                        '$counterNumber of $counterTotal',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+
                 const SizedBox(height: 8),
                 Text(
                   '"$prompt"',
@@ -545,8 +585,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: lastAssessment == null ? Colors.black45 : Colors.black,
-                          fontSize: 20,
-                        ),
+                          fontSize: 20),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
@@ -573,7 +612,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
   String _encouragement(double avg) {
     if (avg < 25) return "Good start!";
     if (avg < 50) return "Keep going!";
-    if (avg < 75) return "Nice progress!";
+    if (avg < 75) return "Nice!";
     if (avg < 90) return "Great job!";
     return "Fantastic!";
   }
