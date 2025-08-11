@@ -2,12 +2,15 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../widgets/home_app_bar.dart';
-import '../widgets/half_donut_gauge.dart';
-import '../widgets/voice_wave.dart';
+import '../widgets/gauge_area.dart';
+import '../widgets/counter_chip.dart';
+import '../widgets/speaker_toggle.dart';
+
 import '../utils/assessment.dart';
 import '../services/speech_service.dart';
 import '../services/tts_service.dart';
 import '../services/tones_service.dart';
+
 import 'session_complete_screen.dart';
 import '../content/content_repository.dart';
 import '../models/assessment_outcome.dart';
@@ -16,24 +19,12 @@ enum PracticeFlowMode { standard, assessment }
 enum PromptKind { introSentence, word, shortSentence }
 
 class PracticeFlowScreen extends StatefulWidget {
-  /// When in [PracticeFlowMode.assessment], the sentences to run in order.
-  final List<String>? items;
-
-  /// Standard (legacy) or assessment.
-  final PracticeFlowMode mode;
-
-  /// Called when a session completes (legacy hook).
-  final VoidCallback? onSessionComplete;
-
-  /// Called when an assessment sequence ends (preferred).
+  final List<String>? items;                     // assessment sentences
+  final PracticeFlowMode mode;                   // standard or assessment
+  final VoidCallback? onSessionComplete;         // legacy hook
   final ValueChanged<AssessmentOutcome>? onAssessmentComplete;
-
-  /// If provided, seeds the first sound in standard mode.
-  final String? initialTargetSound;
-
-  /// Ends a focused block after N total steps (every Next increments),
-  /// e.g., 6 = 3 word+sentence pairs.
-  final int? exercisesTarget;
+  final String? initialTargetSound;              // seed standard mode
+  final int? exercisesTarget;                    // total steps in focused block (e.g., 6)
 
   const PracticeFlowScreen({
     super.key,
@@ -50,52 +41,49 @@ class PracticeFlowScreen extends StatefulWidget {
 }
 
 class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
-  final SpeechService _speech = SpeechService();
-  final TtsService _tts = TtsService();
-  final TonesService _tones = TonesService();
+  final _speech = SpeechService();
+  final _tts = TtsService();
+  final _tones = TonesService();
 
   late ContentRepository _content;
   bool _loading = true;
 
-  // Standard mode state (existing)
-  PromptKind kind = PromptKind.introSentence;
-  String targetSound = 'R';
+  // flow state
+  PromptKind _kind = PromptKind.introSentence;
+  String _targetSound = 'R';
+  String _prompt = '';
+  String _lastWord = '';
 
-  // Shared UI state
-  String prompt = '';
-  String lastWord = '';
-  bool isListening = false;
-  String heard = '';
-  AssessmentResult? lastAssessment;
-
-  final List<int> sessionScores = [];
-  int cyclesCompleted = 0;
-  final int maxCycles = 2; // ignored when focused block is active
-
-  static const double _donutSize = 150;
-  static const double _donutHeight = _donutSize / 2;
-  static const double _transcriptHeight = 56;
-
+  // io state
+  bool _isListening = false;
   bool _autoplayTts = true;
   bool _didKickoff = false;
-
-  // Mic level (web)
   double _micLevel = 0.0;
 
-  // Assessment sequencing
+  // recognition + scoring
+  String _heard = '';
+  AssessmentResult? _lastAssessment;
+
+  // session stats
+  final List<int> _sessionScores = [];
+  int _cyclesCompleted = 0;
+  final int _maxCycles = 2; // ignored for focused blocks
+
+  // assessment sequencing
   int _seqIndex = 0;
+  final List<String> _assessmentSounds = [];
+  final List<int> _assessmentScores = [];
+
+  // focused block (counts EVERY Next)
+  int _stepsCompleted = 0;
+
   bool get _isAssessment =>
       widget.mode == PracticeFlowMode.assessment &&
       (widget.items?.isNotEmpty ?? false);
 
-  // Collect assessment outcomes
-  final List<String> _assessmentSuggestedSounds = [];
-  final List<int> _assessmentScores = [];
-
-  // Focused block counting (ends after exercisesTarget if set)
-  // Counts EVERY Next (word or sentence).
-  int _stepsCompleted = 0;
   bool get _isFocusedBlock => !_isAssessment && (widget.exercisesTarget != null);
+
+  static const double _donutSize = 150;
 
   @override
   void initState() {
@@ -109,29 +97,24 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     _speech.init(onResult: _onHeard);
 
     if (_isAssessment) {
-      // Assessment uses provided sentences
-      prompt = widget.items![_seqIndex];
+      _prompt = widget.items![_seqIndex];
       setState(() => _loading = false);
       WidgetsBinding.instance.addPostFrameCallback((_) => _kickoffIfNeeded());
       return;
     }
 
-    // Standard mode: load legacy sounds content
     _content = await ContentRepository.loadFromAssets();
+    _targetSound = widget.initialTargetSound ?? _content.randomSoundKey();
 
-    // Seed from assessment if provided, else random
-    targetSound = widget.initialTargetSound ?? _content.randomSoundKey();
-
-    // In focused blocks, START AT A WORD and skip intro sentence
+    // Focused blocks start at a WORD (skip intro sentence)
     if (_isFocusedBlock) {
-      kind = PromptKind.word;
-      lastWord = _content.randomWord(targetSound);
-      prompt = lastWord;
-      cyclesCompleted = 0; // legacy gating not used here
-      _stepsCompleted = 0; // ensure fresh counter
+      _kind = PromptKind.word;
+      _lastWord = _content.randomWord(_targetSound);
+      _prompt = _lastWord;
+      _stepsCompleted = 0;
+      _cyclesCompleted = 0; // legacy gate off
     } else {
-      // Legacy: start with intro sentence
-      prompt = _content.randomIntroSentence(targetSound);
+      _prompt = _content.randomIntroSentence(_targetSound);
     }
 
     setState(() => _loading = false);
@@ -144,24 +127,21 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
 
     if (_autoplayTts) {
       await _tts.stop();
-      await _tts.speakAndWait(prompt);
+      await _tts.speakAndWait(_prompt);
     }
     await _startListening();
   }
 
   Future<void> _startListening() async {
     setState(() {
-      heard = '';
-      lastAssessment = null;
-      isListening = true;
+      _heard = '';
+      _lastAssessment = null;
+      _isListening = true;
     });
     await _tones.playStartDing();
     if (kIsWeb) {
       await _tones.startMicLevelStream(
-        onLevel: (lvl) {
-          if (!mounted) return;
-          setState(() => _micLevel = lvl.clamp(0.0, 1.0));
-        },
+        onLevel: (lvl) => mounted ? setState(() => _micLevel = lvl.clamp(0.0, 1.0)) : null,
       );
     }
     _speech.start();
@@ -172,267 +152,161 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
     await _tones.playStopDing();
     if (kIsWeb) {
       await _tones.stopMicLevelStream();
-      setState(() => _micLevel = 0.0);
+      if (mounted) setState(() => _micLevel = 0.0);
     }
-    setState(() => isListening = false);
+    if (mounted) setState(() => _isListening = false);
   }
 
   void _onHeard(String text) {
-    final result = assessRecording(promptedSentence: prompt, recognizedText: text);
-    final scoreInt = result.accuracyPercent.round();
+    final result = assessRecording(promptedSentence: _prompt, recognizedText: text);
+    final score = result.accuracyPercent.round();
 
     setState(() {
-      heard = text;
-      lastAssessment = result;
-      sessionScores.add(scoreInt);
+      _heard = text;
+      _lastAssessment = result;
+      _sessionScores.add(score);
       if (_isAssessment) {
-        _assessmentScores.add(scoreInt);
-        if (result.targetSound.isNotEmpty) {
-          _assessmentSuggestedSounds.add(result.targetSound);
-        }
+        _assessmentScores.add(score);
+        if (result.targetSound.isNotEmpty) _assessmentSounds.add(result.targetSound);
       }
     });
+
     _stopListening();
   }
 
-  void _toggleRecord() {
-    if (isListening) {
-      _stopListening();
-    } else {
-      _startListening();
-    }
-  }
-
-  void _speakPrompt() => _tts.speak(prompt);
-
-  bool get _justFinishedPair =>
-      kind == PromptKind.shortSentence && lastAssessment != null;
-
-  int? _displayExerciseNumber() {
-    if (!_isFocusedBlock || widget.exercisesTarget == null) return null;
-    final total = widget.exercisesTarget!;
-    // Show next step number (1-based), clamped
-    final next = (_stepsCompleted + 1);
-    return next > total ? total : next;
-  }
-
   Future<void> _goNext() async {
+    // Assessment sequence
     if (_isAssessment) {
-      // Advance through provided items
       final isLast = _seqIndex >= (widget.items!.length - 1);
       if (isLast) {
-        final outcome = AssessmentOutcome(
-          suggestedSounds: List<String>.from(_assessmentSuggestedSounds),
+        final out = AssessmentOutcome(
+          suggestedSounds: List<String>.from(_assessmentSounds),
           perSentenceScores: List<int>.from(_assessmentScores),
         );
-
-        // Prefer explicit assessment completion hook
         if (widget.onAssessmentComplete != null) {
-          widget.onAssessmentComplete!(outcome);
+          widget.onAssessmentComplete!(out);
           return;
         }
-
-        // Fallback: legacy complete behavior
         widget.onSessionComplete?.call();
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => SessionCompleteScreen(scores: sessionScores),
-          ),
+          MaterialPageRoute(builder: (_) => SessionCompleteScreen(scores: _sessionScores)),
         );
         return;
       }
 
       setState(() {
         _seqIndex += 1;
-        prompt = widget.items![_seqIndex];
-        heard = '';
-        lastAssessment = null;
+        _prompt = widget.items![_seqIndex];
+        _heard = '';
+        _lastAssessment = null;
       });
 
       if (_autoplayTts) {
         await _tts.stop();
-        await _tts.speakAndWait(prompt);
+        await _tts.speakAndWait(_prompt);
       }
       await _startListening();
       return;
     }
 
-    // -------- Standard mode (existing flow, with focused-block step counting) --------
-
-    // If we have a result, steer toward suggested target sound (if supported)
-    if (lastAssessment != null) {
-      final suggested = lastAssessment!.targetSound;
-      if (_content.hasSound(suggested)) {
-        targetSound = suggested;
-      }
+    // Standard mode steering
+    if (_lastAssessment != null) {
+      final suggested = _lastAssessment!.targetSound;
+      if (_content.hasSound(suggested)) _targetSound = suggested;
     }
 
-    // In focused blocks, COUNT EVERY NEXT and cap at exercisesTarget
+    // Focused block: count EVERY Next and cap at exercisesTarget
     if (_isFocusedBlock && widget.exercisesTarget != null) {
       _stepsCompleted += 1;
       if (_stepsCompleted >= widget.exercisesTarget!) {
         widget.onSessionComplete?.call();
         if (!mounted) return;
-        Navigator.pop(context); // back to results screen
+        Navigator.pop(context); // back to results
         return;
       }
     }
 
-    switch (kind) {
+    // Advance within pair flow
+    switch (_kind) {
       case PromptKind.introSentence:
-        // (Focused blocks don't use introSentence; this is legacy path.)
-        kind = PromptKind.word;
-        lastWord = _content.randomWord(targetSound);
-        prompt = lastWord;
+        _kind = PromptKind.word;
+        _lastWord = _content.randomWord(_targetSound);
+        _prompt = _lastWord;
         break;
 
       case PromptKind.word:
-        kind = PromptKind.shortSentence;
-        prompt = _content.shortSentenceWithWord(targetSound, lastWord);
+        _kind = PromptKind.shortSentence;
+        _prompt = _content.shortSentenceWithWord(_targetSound, _lastWord);
         break;
 
       case PromptKind.shortSentence:
-        // Legacy pair gating only applies when NOT in focused mode
         if (!_isFocusedBlock) {
-          cyclesCompleted += 1;
-          if (cyclesCompleted >= maxCycles) {
-            setState(() {}); // Done (X) finishes session
+          _cyclesCompleted += 1;
+          if (_cyclesCompleted >= _maxCycles) {
+            setState(() {}); // Done (X) ends
             return;
           }
         }
-        // Continue to next word in same target sound
-        kind = PromptKind.word;
-        lastWord = _content.randomWord(targetSound);
-        prompt = lastWord;
+        _kind = PromptKind.word;
+        _lastWord = _content.randomWord(_targetSound);
+        _prompt = _lastWord;
         break;
     }
 
     setState(() {
-      heard = '';
-      lastAssessment = null;
+      _heard = '';
+      _lastAssessment = null;
     });
 
     if (_autoplayTts) {
       await _tts.stop();
-      await _tts.speakAndWait(prompt);
+      await _tts.speakAndWait(_prompt);
     }
     await _startListening();
   }
 
+  void _toggleRecord() => _isListening ? _stopListening() : _startListening();
+
   void _goDone() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => SessionCompleteScreen(scores: sessionScores),
-      ),
+      MaterialPageRoute(builder: (_) => SessionCompleteScreen(scores: _sessionScores)),
     );
   }
 
+  // UI bits
   String? _title() {
     if (_isAssessment) return 'Say This Sentence';
-    switch (kind) {
+    switch (_kind) {
       case PromptKind.introSentence:
         return 'Say This Sentence';
       case PromptKind.word:
         return 'Say This Word';
       case PromptKind.shortSentence:
-        return null; // no title for short sentence
+        return null;
     }
   }
 
-  // Voice Picker (AppBar "Voice…")
-  Future<void> _pickVoice() async {
-    final voices = await _tts.listVoices();
-    if (!mounted) return;
-
-    String? selected;
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Choose a voice'),
-        content: SizedBox(
-          width: 400,
-          height: 300,
-          child: ListView.builder(
-            itemCount: voices.length,
-            itemBuilder: (context, i) {
-              final name = voices[i];
-              final isSelected = selected == name;
-              return ListTile(
-                title: Text(
-                  name,
-                  style: TextStyle(
-                    color: isSelected ? Colors.black : Colors.black87,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-                onTap: () {
-                  selected = name;
-                  Navigator.of(context).pop();
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        ],
-      ),
-    );
-
-    if (selected != null) {
-      await _tts.setPreferredVoice(selected!);
-      if (_autoplayTts) {
-        _speakPrompt();
-      }
-    }
+  int? _counterNumber() {
+    if (!_isFocusedBlock || widget.exercisesTarget == null) return null;
+    final next = _stepsCompleted + 1;
+    return next > widget.exercisesTarget! ? widget.exercisesTarget! : next;
   }
 
-  // Speaker On/Off icons (selected has black border; unselected none)
-  Widget _speakerToggleIcons() {
-    Widget _iconSel({
-      required bool selected,
-      required IconData icon,
-      required VoidCallback onTap,
-    }) {
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: selected ? Colors.black : Colors.transparent,
-              width: 3,
-            ),
-          ),
-          child: Icon(icon, color: selected ? Colors.black : Colors.black45),
-        ),
-      );
-    }
+  bool get _justFinishedPair => _kind == PromptKind.shortSentence && _lastAssessment != null;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _iconSel(
-          selected: _autoplayTts,
-          icon: Icons.volume_up_outlined,
-          onTap: () => setState(() => _autoplayTts = true),
-        ),
-        const SizedBox(width: 12),
-        _iconSel(
-          selected: !_autoplayTts,
-          icon: Icons.volume_off_outlined,
-          onTap: () => setState(() => _autoplayTts = false),
-        ),
-      ],
-    );
+  String _encouragement(double avg) {
+    if (avg < 25) return "Good start!";
+    if (avg < 50) return "Keep going!";
+    if (avg < 75) return "Nice progress!";
+    if (avg < 90) return "Great job!";
+    return "Fantastic!";
   }
+
+  // Speaker toggle handler
+  void _onSpeakerToggle(bool v) => setState(() => _autoplayTts = v);
 
   @override
   Widget build(BuildContext context) {
@@ -443,19 +317,15 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
           title: 'Loading…',
           actions: const [
             TextButton(onPressed: null, child: Text('Voice…', style: TextStyle(color: Colors.black54))),
-            IconButton(
-              tooltip: 'Done',
-              onPressed: null,
-              icon: Icon(Icons.close_outlined, color: Colors.black54),
-            ),
+            IconButton(onPressed: null, icon: Icon(Icons.close_outlined, color: Colors.black54)),
           ],
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    final counterNumber = _displayExerciseNumber();
-    final counterTotal = widget.exercisesTarget;
+    final counterN = _counterNumber();
+    final counterT = widget.exercisesTarget;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -463,7 +333,48 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         title: _title(),
         actions: [
           TextButton(
-            onPressed: _pickVoice,
+            onPressed: () async {
+              final voices = await _tts.listVoices();
+              if (!mounted) return;
+              String? selected;
+              await showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Choose a voice'),
+                  content: SizedBox(
+                    width: 400,
+                    height: 300,
+                    child: ListView.builder(
+                      itemCount: voices.length,
+                      itemBuilder: (context, i) {
+                        final name = voices[i];
+                        final sel = selected == name;
+                        return ListTile(
+                          title: Text(
+                            name,
+                            style: TextStyle(
+                              color: sel ? Colors.black : Colors.black87,
+                              fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                          onTap: () {
+                            selected = name;
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  ],
+                ),
+              );
+              if (selected != null) {
+                await _tts.setPreferredVoice(selected!);
+                if (_autoplayTts) _tts.speak(_prompt);
+              }
+            },
             child: const Text('Voice…', style: TextStyle(color: Colors.black)),
           ),
           IconButton(
@@ -482,42 +393,27 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // TOP-RIGHT COUNTER (only in focused blocks)
-                if (_isFocusedBlock && counterNumber != null && counterTotal != null)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.black, width: 2),
-                      ),
-                      child: Text(
-                        '$counterNumber of $counterTotal',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
+                if (_isFocusedBlock && counterN != null && counterT != null)
+                  CounterChip(current: counterN, total: counterT),
 
                 const SizedBox(height: 8),
                 Text(
-                  '"$prompt"',
+                  '"$_prompt"',
                   style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
 
-                _speakerToggleIcons(),
+                SpeakerToggle(autoplay: _autoplayTts, onChanged: _onSpeakerToggle),
 
                 const SizedBox(height: 16),
                 SizedBox(
-                  height: _transcriptHeight,
+                  height: 56,
                   child: Center(
-                    child: heard.isEmpty
+                    child: _heard.isEmpty
                         ? const SizedBox.shrink()
                         : Text(
-                            heard,
+                            _heard,
                             style: const TextStyle(fontSize: 20, color: Colors.blueAccent),
                             textAlign: TextAlign.center,
                           ),
@@ -525,23 +421,22 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                 ),
 
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: _donutHeight,
-                  child: isListening
-                      ? VoiceWave(level: _micLevel)
-                      : (lastAssessment == null
-                          ? const SizedBox.shrink()
-                          : HalfDonutGauge(
-                              percent: lastAssessment!.accuracyPercent,
-                              size: _donutSize,
-                              thickness: 40,
-                            )),
+                Center(
+                  child: GaugeArea(
+                    isListening: _isListening,
+                    micLevel: _micLevel,
+                    percent: _lastAssessment?.accuracyPercent ?? 0,
+                    showGauge: _lastAssessment != null,
+                    size: _donutSize,
+                    thickness: 40,
+                  ),
                 ),
 
-                if (_justFinishedPair && lastAssessment != null && !_isAssessment) ...[
+                if (_justFinishedPair && _lastAssessment != null && !_isAssessment) ...[
                   const SizedBox(height: 10),
                   Text(
-                    _encouragement(lastAssessment!.accuracyPercent),
+                    _encouragement(_lastAssessment!.accuracyPercent),
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.green,
                       fontStyle: FontStyle.italic,
@@ -558,7 +453,7 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                     ElevatedButton.icon(
                       onPressed: _toggleRecord,
                       icon: Icon(
-                        isListening ? Icons.stop_outlined : Icons.play_arrow_outlined,
+                        _isListening ? Icons.stop_outlined : Icons.play_arrow_outlined,
                         color: Colors.black,
                       ),
                       label: const Text(
@@ -579,17 +474,18 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton.icon(
-                      onPressed: lastAssessment == null ? null : _goNext,
+                      onPressed: _lastAssessment == null ? null : _goNext,
                       icon: Icon(
                         Icons.arrow_forward_outlined,
-                        color: lastAssessment == null ? Colors.black45 : Colors.black,
+                        color: _lastAssessment == null ? Colors.black45 : Colors.black,
                       ),
                       label: Text(
                         'Next',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: lastAssessment == null ? Colors.black45 : Colors.black,
-                          fontSize: 20),
+                          color: _lastAssessment == null ? Colors.black45 : Colors.black,
+                          fontSize: 20,
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
@@ -611,13 +507,5 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         ),
       ),
     );
-  }
-
-  String _encouragement(double avg) {
-    if (avg < 25) return "Good start!";
-    if (avg < 50) return "Keep going!";
-    if (avg < 75) return "Nice progress!";
-    if (avg < 90) return "Great job!";
-    return "Fantastic!";
   }
 }
