@@ -6,12 +6,13 @@ import 'practice_flow_screen.dart';
 
 class AssessmentResultsScreen extends StatefulWidget {
   final AssessmentOutcome outcome;
+  /// Number of total exercises per sound block (e.g., 6 = 3 pairs).
   final int maxExercisesPerSound;
 
   const AssessmentResultsScreen({
     super.key,
     required this.outcome,
-    this.maxExercisesPerSound = 6,// 3 word + sentence pairs
+    this.maxExercisesPerSound = 6, // you set this to 6
   });
 
   @override
@@ -19,8 +20,8 @@ class AssessmentResultsScreen extends StatefulWidget {
 }
 
 class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
-  late final List<_SoundStat> _top3;
-  final Set<String> _completed = {};
+  late final List<_SoundStat> _top3; // filtered + ranked (max 3)
+  final Set<String> _completed = {};     // sounds finished by the child
 
   @override
   void initState() {
@@ -28,31 +29,37 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
     _top3 = _computeTop3(widget.outcome);
   }
 
+  /// Build top-3 by frequency (desc), then avg score (asc),
+  /// but **exclude** any sound that was 100% on all its occurrences.
   List<_SoundStat> _computeTop3(AssessmentOutcome outcome) {
-    // frequency & avg score per suggested sound
     final counts = <String, int>{};
     final sums = <String, int>{};
+    final anyBelow100 = <String, bool>{};
 
     final n = outcome.suggestedSounds.length;
     for (int i = 0; i < n; i++) {
       final s = outcome.suggestedSounds[i];
-      final score = (i < outcome.perSentenceScores.length) ? outcome.perSentenceScores[i] : 0;
+      final score = (i < outcome.perSentenceScores.length)
+          ? outcome.perSentenceScores[i]
+          : 0;
       counts[s] = (counts[s] ?? 0) + 1;
       sums[s] = (sums[s] ?? 0) + score;
+      if (score < 100) anyBelow100[s] = true;
     }
 
-    final stats = counts.keys.map((s) {
-      final c = counts[s]!;
-      final avg = (sums[s]! / c);
-      return _SoundStat(sound: s, count: c, avgScore: avg);
-    }).toList();
+    final stats = counts.keys
+        .where((s) => anyBelow100[s] == true) // drop all-100% sounds
+        .map((s) {
+          final c = counts[s]!;
+          final avg = c == 0 ? 0.0 : (sums[s]! / c);
+          return _SoundStat(sound: s, count: c, avgScore: avg);
+        })
+        .toList();
 
     stats.sort((a, b) {
-      // most occurrences first (more “deficient”)
-      final byCount = b.count.compareTo(a.count);
+      final byCount = b.count.compareTo(a.count); // more occurrences first
       if (byCount != 0) return byCount;
-      // then lower average score first
-      return a.avgScore.compareTo(b.avgScore);
+      return a.avgScore.compareTo(b.avgScore);    // then lower avg first
     });
 
     return stats.take(3).toList();
@@ -67,33 +74,34 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
           initialTargetSound: sound,
           exercisesTarget: widget.maxExercisesPerSound,
           onSessionComplete: () {
-            // one focused block finished
+            // one focused block finished; nothing else needed here
           },
         ),
       ),
     );
+
     setState(() {
       _completed.add(sound);
     });
 
-    // If all three done, rerun assessment
-    if (_completed.length >= _top3.length) {
+    // If all selected sounds are done, re-run assessment
+    if (_completed.length >= _top3.length && _top3.isNotEmpty) {
       await _rerunAssessment();
     }
   }
 
   Future<void> _rerunAssessment() async {
-    // Try to fetch a different story; fall back to the first
     final bank = ContentBankRepository.instance;
-    final story = await bank.getFirstAssessment(locale: 'en'); // TODO: replace with "getAnother" if you add more
+    final story = await bank.getFirstAssessment(locale: 'en'); // TODO: rotate when multiple stories are available
     if (!mounted) return;
+
     if (story == null || story.sentences.isEmpty) {
-      // No story available; just pop back, or show a simple message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No more assessment stories available.')),
       );
       return;
     }
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -105,7 +113,10 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (_) => AssessmentResultsScreen(outcome: outcome),
+                builder: (_) => AssessmentResultsScreen(
+                  outcome: outcome,
+                  maxExercisesPerSound: widget.maxExercisesPerSound,
+                ),
               ),
             );
           },
@@ -119,7 +130,52 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // simple, clean layout; we’ll fancy it up later
+    // If all suggested sounds were perfect (100%), offer to re-assess.
+    if (_top3.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white, elevation: 0,
+          title: const Text('Great job today!', style: TextStyle(color: Colors.black)),
+          iconTheme: const IconThemeData(color: Colors.black),
+        ),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'You spoke very smoothly today, good job!\nWould you like to do another assessment?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _rerunAssessment,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size(200, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.black, width: 2),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text('Do another assessment'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Otherwise, show top sounds to practice next
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -189,11 +245,15 @@ class _SoundCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('/${stat.sound}/',
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          Text(
+            '/${stat.sound}/',
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 6),
-          Text('seen ${stat.count}x · avg ${(stat.avgScore).round()}%',
-              style: const TextStyle(fontSize: 14, color: Colors.black54)),
+          Text(
+            'seen ${stat.count}× · avg ${stat.avgScore.round()}%',
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
+          ),
           const SizedBox(height: 10),
           ElevatedButton(
             onPressed: onTap,
