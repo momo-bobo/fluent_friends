@@ -11,7 +11,7 @@ class AssessmentResultsScreen extends StatefulWidget {
   const AssessmentResultsScreen({
     super.key,
     required this.outcome,
-    this.maxExercisesPerSound = 10,
+    this.maxExercisesPerSound = 6,// 3 word + sentence pairs
   });
 
   @override
