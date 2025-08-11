@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'practice_flow_screen.dart';
 import '../session/assessment_gate.dart';
+import 'assessment_results_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -33,7 +34,7 @@ class WelcomeScreen extends StatelessWidget {
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white, // white button
+                backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 shape: RoundedRectangleBorder(
@@ -56,6 +57,15 @@ class WelcomeScreen extends StatelessWidget {
                       builder: (_) => PracticeFlowScreen(
                         items: gate.story!.sentences,
                         mode: PracticeFlowMode.assessment,
+                        onAssessmentComplete: (outcome) {
+                          AssessmentGate.markDoneNow();
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AssessmentResultsScreen(outcome: outcome),
+                            ),
+                          );
+                        },
                         onSessionComplete: () {
                           AssessmentGate.markDoneNow();
                         },
@@ -66,7 +76,9 @@ class WelcomeScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const PracticeFlowScreen(),
+                      builder: (_) => const PracticeFlowScreen(
+                        mode: PracticeFlowMode.standard,
+                      ),
                     ),
                   );
                 }
