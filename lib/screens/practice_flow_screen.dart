@@ -260,23 +260,27 @@ class _PracticeFlowScreenState extends State<PracticeFlowScreen> {
         break;
 
       case PromptKind.shortSentence:
-        cyclesCompleted += 1;
-
-        // Count a completed exercise at the end of the short-sentence step
+        // Count a completed exercise first
         _exercisesCompleted += 1;
+      
+        // If we're in a focused block, end immediately when target reached
         if (widget.exercisesTarget != null &&
             _exercisesCompleted >= widget.exercisesTarget!) {
-          // End of a focused block for this sound
           widget.onSessionComplete?.call();
           if (!mounted) return;
-          Navigator.pop(context); // return to results screen
+          Navigator.pop(context); // back to results
           return;
         }
-
-        if (cyclesCompleted >= maxCycles) {
-          setState(() {}); // Planned end; Done (X) finishes session
-          return;
+      
+        // Only use maxCycles for legacy unfocused sessions
+        if (widget.exercisesTarget == null) {
+          cyclesCompleted += 1;
+          if (cyclesCompleted >= maxCycles) {
+            setState(() {}); // Done (X) finishes session
+            return;
+          }
         }
+      
         kind = PromptKind.word;
         lastWord = _content.randomWord(targetSound);
         prompt = lastWord;
