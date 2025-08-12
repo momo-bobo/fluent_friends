@@ -27,7 +27,7 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions,
     this.showHomeLeading = true,
     this.showLogo = true,
-    this.logoAssetPath = 'assets/images/logo.svg',
+    this.logoAssetPath = 'assets/images/logo.png',
     this.logoHeight = 28,
     this.onLogoTap,
   });
