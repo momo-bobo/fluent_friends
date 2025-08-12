@@ -3,16 +3,17 @@ import '../models/assessment_outcome.dart';
 import '../session/assessment_gate.dart';
 import '../content/content_bank_repository.dart';
 import 'practice_flow_screen.dart';
+import 'welcome_screen.dart';
 
 class AssessmentResultsScreen extends StatefulWidget {
   final AssessmentOutcome outcome;
-  /// Number of total exercises per sound block (e.g., 6 = 3 pairs).
+  /// Number of total steps per sound block (e.g., 6 = 3 pairs).
   final int maxExercisesPerSound;
 
   const AssessmentResultsScreen({
     super.key,
     required this.outcome,
-    this.maxExercisesPerSound = 6, // you set this to 6
+    this.maxExercisesPerSound = 6,
   });
 
   @override
@@ -21,7 +22,8 @@ class AssessmentResultsScreen extends StatefulWidget {
 
 class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
   late final List<_SoundStat> _top3; // filtered + ranked (max 3)
-  final Set<String> _completed = {};     // sounds finished by the child
+  final Set<String> _completed = {}; // sounds finished by the child
+  bool _allDone = false;
 
   @override
   void initState() {
@@ -74,7 +76,7 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
           initialTargetSound: sound,
           exercisesTarget: widget.maxExercisesPerSound,
           onSessionComplete: () {
-            // one focused block finished; nothing else needed here
+            // block finished
           },
         ),
       ),
@@ -82,22 +84,23 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
 
     setState(() {
       _completed.add(sound);
+      if (_completed.length >= _top3.length && _top3.isNotEmpty) {
+        // All chosen sounds done — show final CTA instead of auto re-assessing.
+        _allDone = true;
+      }
     });
-
-    // If all selected sounds are done, re-run assessment
-    if (_completed.length >= _top3.length && _top3.isNotEmpty) {
-      await _rerunAssessment();
-    }
   }
 
   Future<void> _rerunAssessment() async {
     final bank = ContentBankRepository.instance;
-    final story = await bank.getFirstAssessment(locale: 'en'); // TODO: rotate when multiple stories are available
+
+    // TODO: when you add rotation support, switch to bank.getNextAssessment(locale: 'en')
+    final story = await bank.getFirstAssessment(locale: 'en');
     if (!mounted) return;
 
     if (story == null || story.sentences.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No more assessment stories available.')),
+        const SnackBar(content: Text('No assessment story available.')),
       );
       return;
     }
@@ -125,6 +128,15 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
           },
         ),
       ),
+    );
+  }
+
+  void _goDone() {
+    // Same idea as clicking X: end the flow and return to the welcome/home.
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+      (_) => false,
     );
   }
 
@@ -166,6 +178,11 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
                       elevation: 0,
                     ),
                     child: const Text('Do another assessment'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: _goDone,
+                    child: const Text('Done', style: TextStyle(color: Colors.black)),
                   ),
                 ],
               ),
@@ -211,7 +228,52 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen> {
                   }).toList(),
                 ),
                 const SizedBox(height: 24),
-                if (_completed.isNotEmpty && _completed.length < _top3.length)
+
+                // If all done, show final CTA section
+                if (_allDone) ...[
+                  const Text(
+                    'Nice work! You finished all the practice for these sounds.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _rerunAssessment,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          minimumSize: const Size(160, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Colors.black, width: 2),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text('Practice more'),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: _goDone,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          minimumSize: const Size(120, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Colors.black, width: 2),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ],
+
+                if (!_allDone && _completed.isNotEmpty)
                   const Text(
                     'Pick another sound to practice!',
                     style: TextStyle(fontSize: 16),
