@@ -24,4 +24,4 @@ flutter:
   assets:
     - assets/content/
     - assets/content.json
-    - assets/images/logo.svg
+    - assets/images/logo.png
