@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="320" viewBox="0 0 512 320" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.25"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Chick icon group -->
+  <g id="chick" transform="translate(88,12)" stroke="#3b2c12" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#softShadow)">
+    <!-- body -->
+    <circle cx="116" cy="180" r="78" fill="#ffd54d"/>
+    <path d="M54,178c20,10,36,10,54,0" fill="none"/>
+    <!-- head -->
+    <circle cx="168" cy="96" r="68" fill="#ffd54d"/>
+    <!-- tuft -->
+    <path d="M168,30c10,18,16,24,24,36 -18,-10 -28,-10 -40,-8 8,-10 10,-16 16,-28z" fill="#ffd54d"/>
+    <!-- wing -->
+    <path d="M182,186c28,-8 50,-32 52,-58 0,-4 -4,-6 -8,-4 -20,10 -40,10 -60,8 6,18 10,36 16,54z" fill="#ffd54d"/>
+    <!-- tummy shine -->
+    <ellipse cx="90" cy="170" rx="36" ry="24" fill="#f6c945" opacity="0.25"/>
+    <!-- eyes -->
+    <circle cx="148" cy="96" r="12" fill="#2b2b2b"/>
+    <circle cx="198" cy="100" r="12" fill="#2b2b2b"/>
+    <circle cx="144" cy="92" r="4" fill="#ffffff"/>
+    <circle cx="194" cy="96" r="4" fill="#ffffff"/>
+    <!-- cheeks -->
+    <circle cx="132" cy="116" r="10" fill="#ffb3a7" opacity="0.9"/>
+    <circle cx="214" cy="120" r="10" fill="#ffb3a7" opacity="0.9"/>
+    <!-- beak -->
+    <path d="M168,124c10,0 26,-8 26,-18 0,-6 -12,-10 -26,-10 -14,0 -26,4 -26,10 0,10 16,18 26,18z" fill="#f39c12"/>
+    <path d="M146,106c14,10 30,10 44,0" fill="none"/>
+    <!-- legs -->
+    <path d="M108,244c-2,10 -6,18 -20,26 12,2 22,2 32,-2 -6,8 -12,12 -18,16 12,0 22,-2 30,-8" fill="none" stroke="#3b2c12"/>
+    <path d="M150,244c2,10 6,18 20,26 -12,2 -22,2 -32,-2 6,8 12,12 18,16 -12,0 -22,-2 -30,-8" fill="none" stroke="#3b2c12"/>
+    <!-- feet fills under strokes -->
+    <path d="M92,272c10,2 22,0 34,-4" fill="none" stroke="#e67e22" stroke-width="6"/>
+    <path d="M184,272c-10,2 -22,0 -34,-4" fill="none" stroke="#e67e22" stroke-width="6"/>
+  </g>
+
+  <!-- Wordmark (edit or replace as needed) -->
+  <g font-family="Verdana, Geneva, sans-serif" font-weight="700" fill="#3b2c12" opacity="0.95">
+    <text x="300" y="150" font-size="64" dominant-baseline="middle">KIDS</text>
+    <text x="300" y="210" font-size="64" dominant-baseline="middle">APP</text>
+  </g>
+</svg>
