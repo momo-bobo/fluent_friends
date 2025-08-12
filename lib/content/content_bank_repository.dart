@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart'; // debugPrint
 import 'package:flutter/services.dart' show rootBundle;
 import 'models.dart';
+import 'dart:convert'; // for jsonDecode / json.encode
 
 /// Loads the JSON content bank under assets/content/ using index.json.
 /// Separate from your legacy sounds ContentRepository.
