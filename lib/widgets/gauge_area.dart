@@ -7,7 +7,7 @@ class GaugeArea extends StatelessWidget {
   final double micLevel;          // 0..1
   final double percent;           // 0..100
   final bool showGauge;           // show gauge when not listening and we have a score
-  final double size;              // diameter of the circle the half-donut is based on
+  final double size;              // diameter used only for donut
   final double thickness;
 
   const GaugeArea({
@@ -22,17 +22,24 @@ class GaugeArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Fix: lock both width and height so it cannot stretch horizontally.
     final halfHeight = size / 2;
+
+    if (isListening) {
+      // FIX: give the wave full width so it’s visible and lively.
+      return SizedBox(
+        height: halfHeight,
+        width: double.infinity,
+        child: VoiceWave(level: micLevel),
+      );
+    }
+
+    // Not listening → show the fixed-size half-donut (no stretching).
     return SizedBox(
-      width: size,
       height: halfHeight,
       child: Center(
-        child: isListening
-            ? VoiceWave(level: micLevel)
-            : (showGauge
-                ? HalfDonutGauge(percent: percent, size: size, thickness: thickness)
-                : const SizedBox.shrink()),
+        child: showGauge
+            ? HalfDonutGauge(percent: percent, size: size, thickness: thickness)
+            : const SizedBox.shrink(),
       ),
     );
   }
