@@ -3,37 +3,13 @@
   "locales": ["en"],
   "sets": {
     "assessment": [
-      {
-        "id": "assessment_story_1",
-        "locale": "en",
-        "inline": {
-          "id": "assessment_story_1",
-          "type": "assessment_story",
-          "title": "The Silly Sandwich Adventure",
-          "locale": "en",
-          "sentences": [
-            "Peter the puppy liked to play in the park.",
-            "One sunny day, he spotted a sandwich on a swing.",
-            "He tried to take a tiny bite, but it bounced away!",
-            "Peter laughed, then ran to find his funny lunch."
-          ],
-          "targetSounds": ["p","b","t","d","k","g","s","z","f","v","l","r","w","y","st","sp","tr","pl"]
-        }
-      }
+      { "id": "assessments_en", "path": "assets/content/assessment/assessments_en.json", "locale": "en" }
     ],
     "sentences": [
-      {
-        "id": "general_sentences_en",
-        "path": "assets/content/sentences/general_sentences_en.json",
-        "locale": "en"
-      }
+      { "id": "general_sentences_en", "path": "assets/content/sentences/general_sentences_en.json", "locale": "en" }
     ],
     "words": [
-      {
-        "id": "general_words_en",
-        "path": "assets/content/words/general_words_en.json",
-        "locale": "en"
-      }
+      { "id": "general_words_en", "path": "assets/content/words/general_words_en.json", "locale": "en" }
     ]
   }
 }
