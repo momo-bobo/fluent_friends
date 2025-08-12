@@ -1,0 +1,28 @@
+{
+  "type": "assessment_collection",
+  "locale": "en",
+  "items": [
+    {
+      "id": "assessment_story_1",
+      "type": "assessment_story",
+      "title": "Silly Sandwich Surprise",
+      "sentences": [
+        "Riley raced to make a really big sandwich.",
+        "The lettuce slipped and slid like a little slide.",
+        "Riley grinned, 'Whoops! Round two!'"
+      ],
+      "targetSounds": ["r","l","s"]
+    },
+    {
+      "id": "assessment_story_2",
+      "type": "assessment_story",
+      "title": "The Robot and the Rain",
+      "sentences": [
+        "Rita the robot raced the raindrops.",
+        "She slipped, slid, and said, 'Rerouting!'",
+        "A rainbow rose right above her hat."
+      ],
+      "targetSounds": ["r","s","l"]
+    }
+  ]
+}
