@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart'; // make sure flutter_svg is in pubspec
+import 'package:flutter_svg/flutter_svg.dart'; // add flutter_svg to pubspec
 import '../screens/welcome_screen.dart';
 
 class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -9,7 +9,7 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// Show the Home (leading) button.
   final bool showHomeLeading;
 
-  /// Show the logo on the far right.
+  /// Show the logo next to the Home button.
   final bool showLogo;
 
   /// Asset path to your logo (SVG or PNG).
@@ -37,24 +37,15 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rightActions = <Widget>[
-      if (actions != null) ...actions!,
-      if (showLogo)
-        Padding(
-          padding: const EdgeInsets.only(right: 12.0),
-          child: _Logo(
-            assetPath: logoAssetPath,
-            height: logoHeight,
-            onTap: onLogoTap,
-          ),
-        ),
-    ];
-
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
-      leading: showHomeLeading
-          ? IconButton(
+      automaticallyImplyLeading: false, // we build our own leading row
+      titleSpacing: 0,
+      title: Row(
+        children: [
+          if (showHomeLeading)
+            IconButton(
               tooltip: 'Home',
               onPressed: () {
                 Navigator.pushAndRemoveUntil(
@@ -64,15 +55,24 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                 );
               },
               icon: const Icon(Icons.home_outlined, color: Colors.black),
-            )
-          : null,
-      title: title == null
-          ? null
-          : Text(
+            ),
+          if (showLogo)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: _Logo(
+                assetPath: logoAssetPath,
+                height: logoHeight,
+                onTap: onLogoTap,
+              ),
+            ),
+          if (title != null)
+            Text(
               title!,
               style: const TextStyle(color: Colors.black),
             ),
-      actions: rightActions,
+        ],
+      ),
+      actions: actions,
       iconTheme: const IconThemeData(color: Colors.black),
     );
   }
@@ -96,7 +96,7 @@ class _Logo extends StatelessWidget {
         : Image.asset(assetPath, height: height);
 
     return GestureDetector(
-      onTap: onTap, // can be null (no-op)
+      onTap: onTap,
       child: img,
     );
   }
